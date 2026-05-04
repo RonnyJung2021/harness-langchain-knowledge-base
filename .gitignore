@@ -1,0 +1,12 @@
+prompt.md
+
+# pnpm / tooling temp
+_tmp_*
+
+node_modules/
+dist/
+.env
+
+# 向量与元数据 JSON 不入库；保留 kb_store/.gitkeep
+kb_store/*.json
+
