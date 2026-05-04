@@ -8,6 +8,7 @@
     "ingest": "tsx src/ingest.ts",
     "ingest:smoke": "tsx scripts/ingest-smoke.ts",
     "ask": "tsx src/ask.ts",
+    "chat": "tsx src/chat/cli.ts",
     "clean:kb": "rm -f kb_store/vectors.json kb_store/manifest.json"
   },
   "devDependencies": {

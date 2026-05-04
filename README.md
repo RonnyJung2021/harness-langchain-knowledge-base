@@ -27,7 +27,13 @@ pnpm ask -- "这份资料的核心结论是什么？"
 - **PDF 入库后 chunk 很少或问答答非所问**：常见原因是 PDF **只有扫描图、没有可选中文字**（无文本层）。请换用带文字层的 PDF，或对扫描件做 OCR 后再入库。  
 - **检索不到片段**：可调低环境变量 **`ARK_RAG_SCORE_MIN`**（默认 `0.35`），或改写问题；也可调大 **`ARK_RAG_TOP_K`**（默认 `4`）并配合更具体问题。
 
-换书、清空向量、环境变量与安全边界等运维约定见 **`docs/KB_OPERATIONS.md`**。
+换书、清空向量、环境变量与安全边界等运维约定见 **`docs/KB_OPERATIONS.md`**。多轮对话的**历史条数与参考资料长度裁剪**（`ARK_CHAT_MAX_HISTORY_MESSAGES`、`ARK_RAG_CONTEXT_MAX_CHARS`）见该文档 **「6. 多轮与裁剪」**。
+
+### 多轮对话与会话落盘（可选）
+
+- **默认**：`pnpm chat` 仅在**内存**中保留当前进程内的消息，退出后不留痕。  
+- **落盘**：在 `.env` 中设置 **`ARK_SESSION_PERSIST=1`** 后，每次追加用户/助手消息会写入仓库根目录 **`sessions/{sessionId}.json`**（UTF-8 JSON，含 `id`、`createdAt`、`updatedAt`、`messages`）。**请勿将含敏感提问或业务机密的快照提交到 git**；`sessions/*.json` 已在 `.gitignore` 中忽略，仅保留 `sessions/.gitkeep`。  
+- **恢复**：`pnpm chat -- --resume <sessionId>`，其中 `sessionId` 须为合法 **UUID**（与文件名一致）；实现会校验格式并防止路径穿越。未开启 `ARK_SESSION_PERSIST` 时仍可**只读**从已有 JSON 恢复上下文，但后续对话不会自动写回磁盘，除非再开启落盘。
 
 ## 验收
 

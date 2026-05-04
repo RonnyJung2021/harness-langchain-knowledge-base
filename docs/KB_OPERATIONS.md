@@ -65,6 +65,8 @@ rm -f kb_store/vectors.json kb_store/manifest.json
 | `ARK_EMBED_DIMENSIONS` | 多模态向量维度：`1024` 或 `2048`，须与控制台一致。 |
 | `ARK_RAG_TOP_K` | 可选；RAG 检索条数上限，默认 `4`。 |
 | `ARK_RAG_SCORE_MIN` | 可选；相似度下限，默认 `0.35`。 |
+| `ARK_CHAT_MAX_HISTORY_MESSAGES` | 可选；多轮对话写入模型的最近 user/assistant 条数，默认 `20`；详见 **第六节**。 |
+| `ARK_RAG_CONTEXT_MAX_CHARS` | 可选；【参考资料】拼接块字符上限，默认 `12000`；详见 **第六节**。 |
 
 **方舟控制台截图占位（文字说明）**
 
@@ -94,3 +96,16 @@ rm -f kb_store/vectors.json kb_store/manifest.json
 | 操作不可复现 | 步骤写死为「复制 → ingest → ask / smoke」；验收可用 `pnpm ingest:smoke`。 |
 
 文档版本与实现指南阶段 E 对齐；若命令变更，以根目录 `README.md` 与 `package.json` 的 `scripts` 为准。
+
+---
+
+## 6. 多轮与裁剪（上下文熵管理）
+
+`pnpm chat` 多轮对话与 `pnpm ask` / `runRagChatTurn` 共用同一套裁剪逻辑，避免检索正文与历史消息无界增长导致 token 爆炸。
+
+| 变量 | 含义 |
+|------|------|
+| `ARK_CHAT_MAX_HISTORY_MESSAGES` | 可选；默认 `20`。写入模型消息列表时，从会话历史中只取最近 **N** 条，且 **仅统计** `user` 与 `assistant`（不含当前轮正在发送的用户句，也不计 `system` 角色）。历史先按 `createdAt` 升序排序，再取尾部 N 条。 |
+| `ARK_RAG_CONTEXT_MAX_CHARS` | 可选；默认 `12000`。对检索得到的【参考资料】拼接正文设置**总字符上限**；超出时按**片段顺序**（与入库 chunk 展示顺序一致）保留前面的完整片段，截断后续内容并在末尾追加标记 **「后略」**。System 提示中的规则文案单独拼接，参考资料块本身受此上限约束。 |
+
+实现要点：RAG 使用**单条** `SystemMessage` 承载策略与（已裁剪的）参考资料；多轮轮转为 `HumanMessage` / `AIMessage`。详见源码 `src/chat/ragTurn.ts`、`src/chat/ragFormatting.ts`、`src/chat/chatContextEnv.ts`。
