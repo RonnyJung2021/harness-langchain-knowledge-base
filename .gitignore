@@ -16,3 +16,16 @@ sessions/*.json
 # ingest:smoke 生成的最小 PDF
 pdfs/_smoke.pdf
 
+# HTTP 上传替换知识库产生的 PDF；保留 kb_uploads/.gitkeep
+kb_uploads/*
+!kb_uploads/.gitkeep
+
+# 前端 Vite 构建产物与本地密钥（勿提交）
+web/dist
+web/.env.local
+
+# Playwright
+/test-results/
+/playwright-report/
+/blob-report/
+

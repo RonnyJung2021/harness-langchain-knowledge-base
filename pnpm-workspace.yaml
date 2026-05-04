@@ -1,4 +1,6 @@
-# pnpm 11：放行依赖生命周期脚本（tsx → esbuild）；非 monorepo 可不写 packages
+packages:
+  - .
+  - web
 allowBuilds:
   esbuild: true
-  sharp: true
+  sharp: set this to true or false

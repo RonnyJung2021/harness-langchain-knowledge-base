@@ -1,0 +1,131 @@
+import { randomUUID } from "node:crypto";
+import { Router, type NextFunction, type Request, type Response } from "express";
+import { explainApiError } from "../chat/ragFormatting.js";
+import { runRagChatTurn } from "../chat/ragTurn.js";
+import { assertValidUuidSessionId } from "../chat/sessionPersistence.js";
+import type { ChatMessage } from "../chat/sessionTypes.js";
+import type { ChatServerContext } from "./chatServerContext.js";
+import { HttpError } from "./httpError.js";
+import { readHttpChatMaxMessageChars } from "./messageLimits.js";
+
+function paramSessionId(v: string | string[] | undefined): string {
+  if (v === undefined) {
+    return "";
+  }
+  return Array.isArray(v) ? (v[0] ?? "") : v;
+}
+
+function wrapAsync(
+  fn: (req: Request, res: Response, next: NextFunction) => Promise<void>,
+): (req: Request, res: Response, next: NextFunction) => void {
+  return (req, res, next) => {
+    void fn(req, res, next).catch(next);
+  };
+}
+
+export function createV1SessionsRouter(ctx: ChatServerContext): Router {
+  const router = Router();
+  const maxChars = readHttpChatMaxMessageChars();
+
+  router.post(
+    "/sessions",
+    wrapAsync(async (_req, res) => {
+      const sessionId = ctx.sessionStore.createSession();
+      res.status(201).json({ sessionId });
+    }),
+  );
+
+  router.get(
+    "/sessions/:sessionId",
+    wrapAsync(async (req, res) => {
+      const sessionId = paramSessionId(req.params.sessionId);
+      try {
+        assertValidUuidSessionId(sessionId);
+      } catch {
+        throw new HttpError(400, "INVALID_SESSION_ID", "sessionId 须为合法 UUID");
+      }
+      const messages = ctx.sessionStore.get(sessionId);
+      if (messages === undefined) {
+        throw new HttpError(404, "SESSION_NOT_FOUND", "会话不存在");
+      }
+      res.status(200).json({ id: sessionId, messages });
+    }),
+  );
+
+  router.post(
+    "/sessions/:sessionId/messages",
+    wrapAsync(async (req, res) => {
+      const sessionId = paramSessionId(req.params.sessionId);
+      try {
+        assertValidUuidSessionId(sessionId);
+      } catch {
+        throw new HttpError(400, "INVALID_SESSION_ID", "sessionId 须为合法 UUID");
+      }
+
+      const body = req.body as unknown;
+      if (body === null || typeof body !== "object" || !("text" in body)) {
+        throw new HttpError(400, "INVALID_BODY", "请求体须为 JSON 对象，且包含 text 字段");
+      }
+      const textRaw = (body as { text?: unknown }).text;
+      if (typeof textRaw !== "string") {
+        throw new HttpError(400, "INVALID_BODY", "text 须为字符串");
+      }
+      const userText = textRaw.trim();
+      if (userText === "") {
+        throw new HttpError(400, "EMPTY_TEXT", "text 不能为空或仅空白");
+      }
+      if (userText.length > maxChars) {
+        throw new HttpError(
+          400,
+          "MESSAGE_TOO_LONG",
+          `text 长度不可超过 ${String(maxChars)} 字符`,
+        );
+      }
+
+      const payload = await ctx.enqueueSession(sessionId, async () => {
+        const history = ctx.sessionStore.get(sessionId);
+        if (history === undefined) {
+          throw new HttpError(404, "SESSION_NOT_FOUND", "会话不存在");
+        }
+
+        const now = () => new Date().toISOString();
+        const userMsg: ChatMessage = {
+          id: randomUUID(),
+          role: "user",
+          content: userText,
+          createdAt: now(),
+        };
+
+        let assistantText: string;
+        let citations: Awaited<ReturnType<typeof runRagChatTurn>>["citations"];
+        let degraded: boolean | undefined;
+
+        try {
+          const turnOut = await runRagChatTurn({ sessionId, userText, history }, ctx.ragTurnDeps);
+          assistantText = turnOut.assistantText;
+          citations = turnOut.citations;
+          degraded = turnOut.degraded;
+        } catch (e) {
+          const hint = explainApiError(e);
+          const base = e instanceof Error ? e.message : String(e);
+          const message = [hint, base].filter((s) => s.length > 0).join(" ");
+          throw new HttpError(502, "UPSTREAM", message || "模型或检索调用失败");
+        }
+
+        ctx.sessionStore.append(sessionId, userMsg);
+        ctx.sessionStore.append(sessionId, {
+          id: randomUUID(),
+          role: "assistant",
+          content: assistantText,
+          createdAt: now(),
+        });
+
+        return { answer: assistantText, citations, degraded };
+      });
+
+      res.status(200).json(payload);
+    }),
+  );
+
+  return router;
+}
