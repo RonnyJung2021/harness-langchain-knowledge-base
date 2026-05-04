@@ -9,9 +9,12 @@
     "ingest:smoke": "tsx scripts/ingest-smoke.ts",
     "ask": "tsx src/ask.ts",
     "chat": "tsx src/chat/cli.ts",
+    "serve": "tsx src/server/main.ts",
     "clean:kb": "rm -f kb_store/vectors.json kb_store/manifest.json"
   },
   "devDependencies": {
+    "@types/cors": "^2.8.19",
+    "@types/express": "^5.0.6",
     "tsx": "^4.19.2",
     "typescript": "~5.7.2"
   },
@@ -21,7 +24,9 @@
     "@langchain/core": "^1.1.44",
     "@langchain/openai": "^1.4.5",
     "@langchain/textsplitters": "^1.0.1",
+    "cors": "^2.8.6",
     "dotenv": "^17.4.2",
+    "express": "^5.2.1",
     "langchain": "^1.3.5",
     "pdfjs-dist": "4.10.38"
   }

@@ -3,7 +3,8 @@
 > **读者**：已完成 v1（PDF RAG + `pnpm ask`）与 v2（`runRagChatTurn` + `pnpm chat` 多轮），希望将能力**对外以 HTTP 暴露**，并在本仓库内提供**可视化网页**：多轮对话 + **替换知识库 PDF**（上传或指定路径后重建向量）。  
 > **Harness 对齐**：**任务契约**（REST JSON 与 v2 核心层一一对应）、**状态管理**（会话可内存/可落盘/可外存）、**工具边界**（HTTP 只做 IO；检索与模型调用仍经 `runRagChatTurn`）、**安全边界**（上传路径白名单、鉴权、限流）、**验证机制**（健康检查、E2E 冒烟）。  
 > **部署前瞻**：后续整体 **Docker 化**并部署到**火山引擎**（公网可访问）时，镜像、环境变量、持久卷、负载均衡与 TLS 在本指南末阶段统一约束。  
-> **技术定案建议**：Node.js 20+、TypeScript；HTTP 层推荐 **Hono**（轻量、类型友好）或 **Express**（二选一并全项目统一）；前端可用 **Vite + 原生 fetch** 或极简 React，静态资源由同一进程 `serveStatic` 或由反向代理托管。
+> **技术定案（v3 锁定）**：**Node.js 20+、TypeScript** 全栈；HTTP 层固定 **Express**（路由、中间件、错误处理、静态资源）；前端固定 **Vite + 极简 React**（少量组件/单页即可，状态可用 `useState`/`useReducer`，避免过早引入重型状态库）。静态资源由 **Express `express.static` 托管 `web/dist`**（生产同源），或由前置反向代理托管（二选一文档说明）。  
+> **前端交付要求**：实现完成后必须具备**可操作的验证路径**与**对用户可见的反馈**（见阶段 **O2**）：接口错误码展示、关键操作成功/失败提示；推荐再加 **Playwright（或等价）E2E 冒烟**，便于 CI 与回归。
 
 ---
 
@@ -12,7 +13,7 @@
 | 维度 | v2 | v3 |
 |------|----|----|
 | 入口 | 终端 `pnpm chat` | **HTTP 服务**监听端口；浏览器或任意客户端调用 |
-| 交互 | readline | **网页 UI**：消息列表、输入框、可选「新会话」 |
+| 交互 | readline | **网页 UI（极简 React）**：消息列表、输入框、可选「新会话」；操作结果有明确反馈，并可跑 E2E 冒烟 |
 | 知识库 | 本地 `pnpm ingest -- <pdf>` | **网页或 API** 触发「替换 KB」：上传 multipart 或提交已校验的仓库内相对路径 |
 | 状态 | 进程内 + 可选 `sessions/*.json` | 与 v2 **同形** `sessionId`；生产可换 Redis（接口形状不变） |
 | 运维 | 本机 | **Dockerfile + compose**；火山引擎 **镜像仓库 + 计算 + CLB + HTTPS** |
@@ -44,14 +45,14 @@
 **Agent 输入框粘贴**：
 
 ```text
-在本仓库（已有 v2 runRagChatTurn、sessionStore、chat CLI）上增加 HTTP 服务骨架：
+在本仓库（已有 v2 runRagChatTurn、sessionStore、chat CLI）上增加 HTTP 服务骨架，技术选型固定为 Express：
 
-1) 依赖：增加 Hono（或 Express，二选一写入 package.json），以及 @hono/node-server 若选 Hono。
+1) 依赖：express、cors（若本步需要）；类型用 @types/express、@types/cors
 2) 新建 src/server/app.ts（或 src/http/server.ts）：
-   - 导出 createApp(): 返回配置好中间件与路由的应用实例
+   - 导出 createApp(): 返回配置好中间件与路由的 Express 应用实例
    - GET /healthz → 200 { "ok": true, "ts": "<ISO8601>" }（不调用方舟，避免探活扣费）
-   - 全局 JSON 错误处理：未捕获异常映射为 500 { "error": { "code": "INTERNAL", "message": "..." } }；业务错误用 4xx + 稳定 code
-3) 新建 src/server/main.ts：读取 PORT（默认 8787），listen；优雅关闭 SIGTERM/SIGINT
+   - 使用 express.json()；全局 JSON 错误处理：未捕获异常映射为 500 { "error": { "code": "INTERNAL", "message": "..." } }；业务错误用 4xx + 稳定 code（可用自定义 Error 子类 + 中间件统一转换）
+3) 新建 src/server/main.ts：读取 PORT（默认 8787），http.createServer(app).listen；优雅关闭 SIGTERM/SIGINT
 4) package.json 增加 "serve": "tsx src/server/main.ts"（路径以实际为准）
 5) 不要在本步实现聊天与上传，仅保证 pnpm run build 与 pnpm serve 可启动，curl /healthz 成功
 
@@ -111,8 +112,8 @@
 **Agent 输入框粘贴**：
 
 ```text
-为 Hono/Express 增加可配置 CORS（env HTTP_CORS_ORIGINS 逗号分隔，开发默认 http://127.0.0.1:5173）。
-生产环境建议同源（前端静态由同一服务托管）或将 CORS 收紧为明确域名。
+为 Express 增加可配置 CORS（使用 cors 包；env HTTP_CORS_ORIGINS 逗号分隔，开发默认 http://127.0.0.1:5173）。
+生产环境建议同源（Express 托管 web/dist）或将 CORS 收紧为明确域名。
 写入 .env.example 中文注释。
 ```
 
@@ -188,36 +189,74 @@
 
 ## 5. 阶段 O：可视化网页（多轮对话 + 替换 KB）
 
-### O1. 前端静态资源与同源托管
+### O1. 极简 React + Vite 与 Express 同源托管
 
-**目的**：单镜像部署时，浏览器只访问一个 origin（简化 CORS 与 Cookie）。
+**目的**：单镜像部署时，浏览器只访问一个 origin（简化 CORS 与 Cookie）；技术栈与仓库定案一致（React + Express）。
 
 **Harness 对齐**：**上下文组织**（前端不持有密钥；仅调同源 `/v1`）。
 
 **Agent 输入框粘贴**：
 
 ```text
-在本仓库增加 web/ 目录（Vite + TypeScript）：
+在本仓库增加 web/ 目录（Vite + TypeScript + React，保持极简）：
+  - 依赖：react、react-dom；开发 @vitejs/plugin-react；构建目标为 web/dist
+  - 入口：单页或 2～3 个小组件即可（如 App.tsx、ChatPanel.tsx、KbReplacePanel.tsx），禁止为演示引入 Redux 等重型方案
   - 页面：左侧或顶部「当前 session」显示 sessionId；按钮「新会话」调用 POST /v1/sessions
   - 中间：消息列表（user/assistant），底部输入框发送 POST /v1/sessions/:id/messages；展示 citations 折叠区或脚注
-  - 「替换知识库」：<input type=file accept=application/pdf> + 上传按钮调用 POST /v1/knowledge-base:replace，显示进度与返回 chunkCount
-  - 开发：vite proxy 将 /v1 代理到 pnpm serve
-  - 生产：pnpm build:web 产出 dist/，由 Hono 使用 serveStatic 挂载到 /（API 仍 /v1）
+  - 「替换知识库」：<input type=file accept=application/pdf> + 上传按钮调用 POST /v1/knowledge-base:replace；开发环境可用 Vite 环境变量注入 Bearer（README 标明**勿提交**）；生产环境优先**短期票据 / 同源 Cookie 会话 / 网关鉴权**，避免将长期 HTTP_ADMIN_TOKEN 编译进前端静态包
+  - 开发：Vite server 将 /v1 代理到 http://127.0.0.1:8787（与 pnpm serve 一致）
+  - 生产：pnpm build:web 产出 web/dist；Express 在注册 /v1 路由之后使用 express.static("web/dist")，并对 SPA 使用 fallback 到 index.html（注意 /v1 不得被 fallback 吞掉）
   - package.json 增加 build:web、dev:web；根 README 简短说明「双终端：serve + dev:web」
 
 不在前端写 ARK_API_KEY；所有模型调用走服务端。
 
-验收：本地双进程可完整走通多轮 + 上传替换；生产构建后单 serve 可打开页面。
+验收：本地双进程可完整走通多轮 + 上传替换；生产构建后单 pnpm serve 可打开页面且 API 正常。
 ```
 
 **验收标准**：
 
-- 网络面板中请求仅指向同源或 dev proxy，**无**密钥 query/header 暴露给第三方脚本。  
+- 网络面板中请求仅指向同源或 dev proxy，**无**方舟密钥暴露。  
 - UI 能展示 `citations` 与 `degraded`（若有）。
 
 **Harness 对齐**：**安全边界**（密钥仅在服务端 env）。
 
-### O2. 可选体验：流式输出（SSE）
+### O2. 前端完成后的验证与反馈（必做）
+
+**目的**：Human 与 CI 都能**确认前端可用**；用户在页面上能**看到每一步结果**（成功、失败原因、可重试提示），对齐 Harness **验证机制**与**反馈回路**。
+
+**Harness 对齐**：**验证机制**（可重复执行的检查）；**反馈回路**（错误 `code`、HTTP 状态、耗时可见，而非静默失败）。
+
+**Agent 输入框粘贴**：
+
+```text
+在 web/ 极简 React 应用中增加「验证 + 反馈」能力（与阶段 L/M/N 接口对齐）：
+
+A) 用户可见反馈（必做）
+  - 所有 fetch：根据 HTTP 状态与 body.error.code 展示明确文案（401/413/429/500 区分）；网络失败单独提示
+  - 发送消息、上传 PDF：loading 态禁用按钮；成功 toast 或内联成功条（含关键字段如 chunkCount、message 条数）
+  - 空 session、未上传即提问等边界：按钮禁用或 inline 提示，避免无效点击
+
+B) 页内「自检」或诊断区（必做其一）
+  - 方案 1：折叠面板「连接自检」：顺序请求 GET /healthz → POST /v1/sessions →（可选）POST 一条短消息或仅 GET session；每一步显示 ✓/✗、HTTP 状态、耗时 ms；失败时展示服务端返回的 message/code（脱敏）
+  - 方案 2：开发环境仅在 import.meta.env.DEV 显示诊断条，生产构建关闭（须在 README 说明）
+
+C) 自动化 E2E（强烈推荐，便于完成后一键验证）
+  - 使用 @playwright/test；webServer 配置同时拉起 API（或文档说明先 pnpm serve 再 playwright test）
+  - 至少 1 条用例：打开首页 → 点击新会话（或依赖默认）→ 输入框发送固定短句 → 断言页面出现 assistant 区域或非空回答占位（若 CI 无方舟密钥，可用 MSW mock /v1 或跳过并文档标注 required secrets）
+  - package.json 增加 "test:e2e": "playwright test"；可选 CI job 仅在有 secrets 时跑
+
+验收：人工在 UI 上能一眼看到上次操作成功或失败原因；本地 pnpm test:e2e 在约定前提下通过（或 mock 模式下通过）。
+```
+
+**验收标准**：
+
+- 故意填错 Admin Token 或断网时，UI 有**明确错误反馈**，不白屏、不无限 loading。  
+- 「连接自检」或等价能力可在 30 秒内确认服务端与 API 前缀正常。  
+- `pnpm test:e2e` 在文档描述的条件下可稳定通过（真实 API 或 mock 二选一写清）。
+
+**Harness 对齐**：**错误分类**（用户可理解的原因）；**验证**（E2E 或自检面板作为交付证据）。
+
+### O3. 可选体验：流式输出（SSE）
 
 **目的**：长回答时逐字显示（非 v3 必须；若做则单独一步以免阻塞主线）。
 
@@ -227,7 +266,7 @@
 
 ```text
 若需流式：新增 POST /v1/sessions/:id/messages:stream，使用 Server-Sent Events，最后一帧附带 citations JSON。
-须与现有非流式 POST 并存；文档标明客户端用法。
+须与现有非流式 POST 并存；文档标明客户端用法；React 端用 EventSource 或 fetch 流解析。
 ```
 
 ---
@@ -243,7 +282,7 @@
 ```text
 按清单实现或文档化（未实现项在 README「生产 checklist」打勾留空）：
 
-1) 速率限制：按 IP + 可选按 sessionId 对 POST /messages 限流（如 express-rate-limit 或 hono-rate-limiter）
+1) 速率限制：按 IP + 可选按 sessionId 对 POST /messages 限流（使用 express-rate-limit）
 2) 请求体大小限制：与 KB 上传上限区分，JSON 路由单独更小
 3) 日志：结构化日志（pino），禁止打印完整用户 PDF 内容与完整 prompt；错误 id 关联
 4) 超时：方舟调用设置合理 timeout；超时返回 504 + 可重试 hint
@@ -356,7 +395,7 @@
 - [ ] **HTTP**：`/healthz` 可用；会话三端点与 `docs/KB_API.md`（及可选 `httpShape.ts`）一致。  
 - [ ] **核心层**：handler 不泄漏实现细节；`runRagChatTurn` 与 ingest 核心可被 CLI 与 HTTP 共用。  
 - [ ] **替换 KB**：鉴权、大小/MIME 校验、互斥、替换后检索使用新向量。  
-- [ ] **网页**：多轮对话 + 上传替换 PDF 全流程可走通（本地 dev proxy 或生产同源）。  
+- [ ] **网页**：多轮对话 + 上传替换 PDF 全流程可走通（本地 dev proxy 或生产同源）；**错误与成功反馈**清晰；**自检或 E2E** 至少一种可重复验证方式已落地。  
 - [ ] **密钥**：浏览器与仓库中均无 `ARK_API_KEY`；仅服务端环境变量。  
 - [ ] **Docker**：`docker compose up --build` 可运行；非 root；卷挂载说明文档化。  
 - [ ] **火山引擎**：镜像推送、Secret、CLB+HTTPS、上传大小限制已核对（至少文档级 checklist 已完成）。
@@ -373,12 +412,12 @@
 | 状态管理 | 会话是否在多副本场景下有明确策略（单副本 MVP 或 Redis）？ |
 | 反馈回路 | `citations` 与错误 `code` 是否到达前端与日志？ |
 | 安全边界 | 鉴权、限流、路径白名单、上传上限是否落在运行时？ |
-| 验证机制 | 健康检查、替换后检索验证、镜像 smoke 是否具备？ |
+| 验证机制 | 健康检查、替换后检索验证、镜像 smoke 是否具备？前端自检或 Playwright 是否可重复跑通？ |
 
 ---
 
 ## 11. 文档版本与依赖
 
 - **前置**：`implement guide/langchain-pdf-kb-rag-cursor-harness.md`（v1）、`implement guide/langchain-pdf-kb-rag-cursor-harness-v2.md`（v2）。  
-- **本文档**：v3，面向 **HTTP + Web + Docker + 火山引擎** 交付路径；具体包版本以仓库 `package.json` 为准。  
-- **执行顺序建议**：L → M → N1 → N2 → O → P → Q → R；流式 O2 与 M2 可按需插入。
+- **本文档**：v3，面向 **Express + 极简 React + Docker + 火山引擎** 交付路径；具体包版本以仓库 `package.json` 为准。  
+- **执行顺序建议**：L → M → N1 → N2 → O1 → **O2（验证与反馈）** → P → Q → R；流式 **O3** 与 M2 可按需插入。
