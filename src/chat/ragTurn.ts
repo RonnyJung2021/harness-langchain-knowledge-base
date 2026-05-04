@@ -13,7 +13,7 @@ import {
   extractAssistantTextFromInvokeContent,
   truncateReferencesContextBlock,
 } from "./ragFormatting.js";
-import type { ChatMessage, RagTurnInput, RagTurnOutput } from "./sessionTypes.js";
+import type { ChatMessage, CitationSummary, RagTurnInput, RagTurnOutput } from "./sessionTypes.js";
 
 export type RagTurnDeps = {
   embeddings: EmbeddingsInterface;
@@ -24,6 +24,13 @@ export type RagTurnDeps = {
   buildSystemPrompt: (referencesMarkdown: string) => string;
   /** 覆盖环境变量中的上下文裁剪默认值（单测或临时调参）。 */
   contextLimits?: Partial<ChatContextLimits>;
+};
+
+/** 检索与 system 拼装完成后、调用模型前的可复用状态（invoke / stream 共用）。 */
+type PreparedRagTurn = {
+  messages: BaseMessage[];
+  citations: CitationSummary[];
+  degraded: boolean;
 };
 
 /**
@@ -76,10 +83,10 @@ export function assembleRagInvokeMessages(
   ];
 }
 
-export async function runRagChatTurn(
+async function prepareRagTurnMessages(
   input: RagTurnInput,
   deps: RagTurnDeps,
-): Promise<RagTurnOutput> {
+): Promise<PreparedRagTurn> {
   const limits: ChatContextLimits = {
     ...loadChatContextLimits(),
     ...deps.contextLimits,
@@ -102,10 +109,51 @@ export async function runRagChatTurn(
   const historyForModel = trimHistoryForRagModel(input.history, limits.maxHistoryMessages);
   const messages = assembleRagInvokeMessages(systemText, historyForModel, input.userText);
 
+  return {
+    messages,
+    citations,
+    degraded: degraded === true,
+  };
+}
+
+export async function runRagChatTurn(
+  input: RagTurnInput,
+  deps: RagTurnDeps,
+): Promise<RagTurnOutput> {
+  const { messages, citations, degraded } = await prepareRagTurnMessages(input, deps);
+
   const res = await deps.createChat().invoke(messages);
 
   const assistantText = extractAssistantTextFromInvokeContent(res.content).trim();
 
+  return {
+    assistantText,
+    citations,
+    degraded: degraded || undefined,
+  };
+}
+
+/**
+ * 与 {@link runRagChatTurn} 相同的检索与 system 策略；模型侧使用 LangChain `stream`，
+ * 对每个增量文本块调用 `onTokenDelta`（通常为 UTF-16 子串级增量，依上游 SDK 而定）。
+ */
+export async function runRagChatTurnStream(
+  input: RagTurnInput,
+  deps: RagTurnDeps,
+  onTokenDelta: (delta: string) => void,
+): Promise<RagTurnOutput> {
+  const { messages, citations, degraded } = await prepareRagTurnMessages(input, deps);
+  const chat = deps.createChat();
+  let acc = "";
+  const stream = await chat.stream(messages);
+  for await (const chunk of stream) {
+    const piece = extractAssistantTextFromInvokeContent(chunk.content);
+    if (piece.length > 0) {
+      acc += piece;
+      onTokenDelta(piece);
+    }
+  }
+  const assistantText = acc.trim();
   return {
     assistantText,
     citations,

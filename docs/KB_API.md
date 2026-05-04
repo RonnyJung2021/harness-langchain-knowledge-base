@@ -123,6 +123,37 @@ curl -sS "${BASE}/v1/sessions/${SID}" | jq '.messages | length'
 
 ---
 
+## 3.1 流式发送（SSE，可选）
+
+`POST /v1/sessions/:sessionId/messages:stream`
+
+与非流式 `POST .../messages` **并存**：请求体相同（`application/json`，`{ "text": "..." }`），校验与 `502` / `404` 语义一致；成功时响应为 **`text/event-stream`**（SSE），而非单条 JSON。
+
+**事件类型**（每条 SSE 帧含 `event:` 与单行 `data:`，`data` 为 JSON 字符串）：
+
+| `event` | `data` JSON 形状 | 说明 |
+|--------|------------------|------|
+| `delta` | `{ "text": "<增量片段>" }` | 模型输出增量，可出现多次 |
+| `done` | `{ "citations": [...], "degraded"?: boolean }` | **最后一帧**：与非流式响应中的 `citations` / `degraded` 一致（无 `answer` 字段；完整正文以流中所有 `delta` 拼接为准，且服务端已写入会话） |
+| `error` | `{ "code": string, "message": string }` | 如模型/检索失败；帧后连接结束 |
+
+**客户端说明**：
+
+- 浏览器原生 **`EventSource` 仅支持 GET**，无法携带本接口所需的 **JSON POST body**，因此请使用 **`fetch` + `response.body.getReader()`**（或 axios/fetch 封装）按 SSE 规范以「空行」分隔事件帧；仓库内 React 示例见 `web/src/api.ts` 的 `postSessionMessageStream`。
+- 若将来改为 GET + query 参数，才可用 `EventSource`；当前定案为 **POST**。
+
+**curl 示例**（需 `--no-buffer` 才能实时看到 `delta`）：
+
+```bash
+SID=$(curl -sS -X POST http://127.0.0.1:8787/v1/sessions | jq -r .sessionId)
+
+curl -sS --no-buffer -X POST "http://127.0.0.1:8787/v1/sessions/${SID}/messages:stream" \
+  -H 'Content-Type: application/json' \
+  -d '{"text":"你好"}'
+```
+
+---
+
 ## 4. 会话落盘
 
 若设置 `ARK_SESSION_PERSIST=1`，与 `pnpm chat` 相同：每次向 store 追加消息后写入 `sessions/{sessionId}.json`。HTTP API 与 CLI 共用同一套 `createInMemorySessionStore` 行为。
@@ -131,7 +162,7 @@ curl -sS "${BASE}/v1/sessions/${SID}" | jq '.messages | length'
 
 ## 5. 并发语义
 
-同一 `sessionId` 上多条 `POST .../messages` 在服务端**串行**执行，避免交错追加导致顺序错乱。
+同一 `sessionId` 上多条 `POST .../messages` 与 **`POST .../messages:stream`** 在服务端**串行**执行（同一队列），避免交错追加导致顺序错乱。
 
 ---
 
@@ -172,4 +203,4 @@ curl -sS -X POST http://127.0.0.1:8787/v1/knowledge-base/replace \
 
 ## 7. 类型定义（可选）
 
-TypeScript 请求/响应形状见 `src/chat/httpShape.ts`，与本文 JSON 字段对齐。
+TypeScript 请求/响应形状见 `src/chat/httpShape.ts`（含 SSE `done` 载荷类型 `SseSessionMessageDonePayload`），与本文 JSON 字段对齐。

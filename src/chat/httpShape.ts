@@ -12,6 +12,17 @@ export type PostSessionMessageResponseBody = {
   degraded?: boolean;
 };
 
+/** SSE `event: done` 时 `data` JSON（与 {@link PostSessionMessageResponseBody} 的 citations/degraded 对齐，无 answer 字段）。 */
+export type SseSessionMessageDonePayload = {
+  citations: CitationSummary[];
+  degraded?: boolean;
+};
+
+/** SSE `event: delta` 时 `data` JSON。 */
+export type SseSessionMessageDeltaPayload = {
+  text: string;
+};
+
 /** GET /v1/sessions/:sessionId → 200 */
 export type GetSessionResponseBody = {
   id: string;

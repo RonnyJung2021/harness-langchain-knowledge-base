@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { errorToBannerText, fetchJson } from "./api";
+import { errorToBannerText, fetchJson, postSessionMessageStream } from "./api";
 import type { ChatMessage, CitationSummary } from "./types";
 
 type SessionGet = { id: string; messages: ChatMessage[] };
@@ -41,6 +41,12 @@ export function ChatPanel(props: {
   const [rows, setRows] = useState<MessageView[]>([]);
   const [draft, setDraft] = useState("");
   const [sending, setSending] = useState(false);
+  /** 勾选时使用 `POST .../messages:stream`（fetch + SSE）；否则沿用非流式 JSON。 */
+  const [useStream, setUseStream] = useState(false);
+  /** 流式进行中：展示用户句与当前已生成的助手片段（落盘仍以服务端 GET 为准）。 */
+  const [streamPreview, setStreamPreview] = useState<{ userText: string; text: string } | null>(
+    null,
+  );
   const [okLine, setOkLine] = useState<string | null>(null);
   const okTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
@@ -86,23 +92,41 @@ export function ChatPanel(props: {
     setSending(true);
     setDraft("");
     try {
-      const out = await fetchJson<MsgResp>(`/v1/sessions/${sessionId}/messages`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ text }),
-      });
-      const s = await fetchJson<SessionGet>(`/v1/sessions/${sessionId}`);
-      setRows(patchLastAssistantCitations(s.messages, out.citations, out.degraded));
-      clearOkTimer();
-      setOkLine(`已发送。当前会话共 ${String(s.messages.length)} 条消息；本轮引用 ${String(out.citations.length)} 条。`);
-      okTimer.current = setTimeout(() => setOkLine(null), 6000);
+      if (useStream) {
+        setStreamPreview({ userText: text, text: "" });
+        const out = await postSessionMessageStream(sessionId, text, (delta) => {
+          setStreamPreview((p) => (p === null ? p : { ...p, text: p.text + delta }));
+        });
+        setStreamPreview(null);
+        const s = await fetchJson<SessionGet>(`/v1/sessions/${sessionId}`);
+        setRows(patchLastAssistantCitations(s.messages, out.citations, out.degraded));
+        clearOkTimer();
+        setOkLine(
+          `已发送（流式）。当前会话共 ${String(s.messages.length)} 条消息；本轮引用 ${String(out.citations.length)} 条。`,
+        );
+        okTimer.current = setTimeout(() => setOkLine(null), 6000);
+      } else {
+        const out = await fetchJson<MsgResp>(`/v1/sessions/${sessionId}/messages`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ text }),
+        });
+        const s = await fetchJson<SessionGet>(`/v1/sessions/${sessionId}`);
+        setRows(patchLastAssistantCitations(s.messages, out.citations, out.degraded));
+        clearOkTimer();
+        setOkLine(
+          `已发送。当前会话共 ${String(s.messages.length)} 条消息；本轮引用 ${String(out.citations.length)} 条。`,
+        );
+        okTimer.current = setTimeout(() => setOkLine(null), 6000);
+      }
     } catch (e) {
+      setStreamPreview(null);
       onNotice(errorToBannerText(e), "err");
       setDraft(text);
     } finally {
       setSending(false);
     }
-  }, [clearOkTimer, draft, onNotice, sessionId]);
+  }, [clearOkTimer, draft, onNotice, sessionId, useStream]);
 
   const noSession = sessionId === null;
 
@@ -141,10 +165,10 @@ export function ChatPanel(props: {
           background: "#fafafa",
         }}
       >
-        {rows.length === 0 ? (
+        {rows.length === 0 && streamPreview === null ? (
           <p style={{ color: "#888", margin: 0 }}>暂无消息。</p>
-        ) : (
-          rows.map((m) => (
+        ) : null}
+        {rows.map((m) => (
             <div
               key={m.id}
               style={{ marginBottom: 12 }}
@@ -171,9 +195,39 @@ export function ChatPanel(props: {
                 </details>
               ) : null}
             </div>
-          ))
-        )}
+          ))}
+        {streamPreview !== null ? (
+          <div style={{ marginTop: 8, paddingTop: 8, borderTop: "1px dashed #ccc" }}>
+            <div style={{ fontSize: 11, color: "#666" }}>user · 流式预览</div>
+            <div style={{ whiteSpace: "pre-wrap", marginTop: 4 }}>{streamPreview.userText}</div>
+            <div style={{ fontSize: 11, color: "#666", marginTop: 8 }}>assistant · 生成中</div>
+            <div style={{ whiteSpace: "pre-wrap", marginTop: 4 }} data-testid="stream-preview">
+              {streamPreview.text.length > 0 ? streamPreview.text : "…"}
+            </div>
+          </div>
+        ) : null}
       </div>
+      <label
+        style={{
+          display: "flex",
+          alignItems: "center",
+          gap: 6,
+          marginBottom: 8,
+          fontSize: 13,
+          cursor: noSession ? "not-allowed" : "pointer",
+          color: noSession ? "#999" : undefined,
+        }}
+      >
+        <input
+          type="checkbox"
+          checked={useStream}
+          disabled={noSession || sending}
+          onChange={(e) => {
+            setUseStream(e.target.checked);
+          }}
+        />
+        流式输出（SSE，POST …/messages:stream）
+      </label>
       <div style={{ display: "flex", gap: 8 }}>
         <input
           data-testid="chat-input"
