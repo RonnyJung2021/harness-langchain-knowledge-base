@@ -5,8 +5,10 @@ import { runRagChatTurn, runRagChatTurnStream } from "../chat/ragTurn.js";
 import { assertValidUuidSessionId } from "../chat/sessionPersistence.js";
 import type { ChatMessage } from "../chat/sessionTypes.js";
 import type { ChatServerContext } from "./chatServerContext.js";
+import { isLikelyArkOrNetworkTimeout } from "./arkTimeout.js";
 import { HttpError } from "./httpError.js";
 import { readHttpChatMaxMessageChars } from "./messageLimits.js";
+import { createMessagesPostRateLimiter } from "./rateLimits.js";
 import { initSseResponse, writeSseEvent } from "./sseWrite.js";
 
 function paramSessionId(v: string | string[] | undefined): string {
@@ -47,9 +49,24 @@ function parseMessageTextBody(req: Request, maxChars: number): string {
   return userText;
 }
 
+function mapRagFailureToHttpError(e: unknown): HttpError {
+  if (isLikelyArkOrNetworkTimeout(e)) {
+    return new HttpError(
+      504,
+      "ARK_TIMEOUT",
+      "方舟或网络请求超时，请稍后重试；若持续出现可调高 ARK_REQUEST_TIMEOUT_MS 或检查网络。",
+    );
+  }
+  const hint = explainApiError(e);
+  const base = e instanceof Error ? e.message : String(e);
+  const message = [hint, base].filter((s) => s.length > 0).join(" ");
+  return new HttpError(502, "UPSTREAM", message || "模型或检索调用失败");
+}
+
 export function createV1SessionsRouter(ctx: ChatServerContext): Router {
   const router = Router();
   const maxChars = readHttpChatMaxMessageChars();
+  const messagesPostLimiter = createMessagesPostRateLimiter();
 
   router.post(
     "/sessions",
@@ -78,6 +95,7 @@ export function createV1SessionsRouter(ctx: ChatServerContext): Router {
 
   router.post(
     "/sessions/:sessionId/messages",
+    messagesPostLimiter,
     wrapAsync(async (req, res) => {
       const sessionId = paramSessionId(req.params.sessionId);
       try {
@@ -112,10 +130,7 @@ export function createV1SessionsRouter(ctx: ChatServerContext): Router {
           citations = turnOut.citations;
           degraded = turnOut.degraded;
         } catch (e) {
-          const hint = explainApiError(e);
-          const base = e instanceof Error ? e.message : String(e);
-          const message = [hint, base].filter((s) => s.length > 0).join(" ");
-          throw new HttpError(502, "UPSTREAM", message || "模型或检索调用失败");
+          throw mapRagFailureToHttpError(e);
         }
 
         ctx.sessionStore.append(sessionId, userMsg);
@@ -136,6 +151,7 @@ export function createV1SessionsRouter(ctx: ChatServerContext): Router {
   /** 路径字面量 `messages:stream`（Express 中 `:` 须转义）。 */
   router.post(
     "/sessions/:sessionId/messages\\:stream",
+    messagesPostLimiter,
     wrapAsync(async (req, res) => {
       const sessionId = paramSessionId(req.params.sessionId);
       try {
@@ -178,12 +194,10 @@ export function createV1SessionsRouter(ctx: ChatServerContext): Router {
           citations = turnOut.citations;
           degraded = turnOut.degraded;
         } catch (e) {
-          const hint = explainApiError(e);
-          const base = e instanceof Error ? e.message : String(e);
-          const message = [hint, base].filter((s) => s.length > 0).join(" ");
+          const mapped = mapRagFailureToHttpError(e);
           writeSseEvent(res, "error", {
-            code: "UPSTREAM",
-            message: message || "模型或检索调用失败",
+            code: mapped.code,
+            message: mapped.message,
           });
           res.end();
           return;

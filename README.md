@@ -31,15 +31,27 @@ pnpm ask -- "这份资料的核心结论是什么？"
 
 ### 可视化网页（Vite + React，极简）
 
-- **双进程开发**：终端 A 根目录执行 **`pnpm serve`**（默认 `8787`，需已有 `kb_store` 与根目录 `.env`）；终端 B 执行 **`pnpm dev:web`**，浏览器打开 **http://127.0.0.1:5173**（Vite 将 `/v1`、`/healthz` 代理到 `127.0.0.1:8787`）。  
+- **双进程开发**：终端 A 根目录执行 **`pnpm serve`**（默认 `8787`，需已有 `kb_store` 与根目录 `.env`）；终端 B 执行 **`pnpm dev:web`**，浏览器打开 **http://127.0.0.1:5173**（Vite 将 `/v1`、`/healthz`、`/readyz` 代理到 `127.0.0.1:8787`）。  
 - **替换知识库**：页面使用 `POST /v1/knowledge-base/replace`，需在 **`web/.env.local`** 配置 **`VITE_HTTP_ADMIN_TOKEN`**，与根目录服务端 **`HTTP_ADMIN_TOKEN`** 一致；**勿将 `web/.env.local` 提交到 git**（已在 `.gitignore`）。生产环境请用短期票据、同源 Cookie 或网关鉴权，避免把长期 token 打进前端静态包。  
 - **单进程生产**：先 **`pnpm run build && pnpm run build:web`**，再只跑 **`pnpm serve`**：Express 在挂载 `/v1` 后托管 **`web/dist`**，并对非 `/v1` 的 `GET` 回退到 **`index.html`**（静态资源与 API 不冲突）。
 
 HTTP JSON 契约见 **`docs/KB_API.md`**。
 
+### 生产 checklist（阶段 P）
+
+上线前逐项核对；已实现项已勾选，其余留空待网关 / 运维补齐。
+
+- [x] **速率限制**：`express-rate-limit` 作用于 `POST .../messages` 与 `POST .../messages:stream`；`HTTP_RATE_LIMIT_ENABLED=1` 时生效，键为客户端 IP，可选 `HTTP_RATE_LIMIT_BY_SESSION=1` 叠加 `sessionId`；超限返回 **429**、`error.code: RATE_LIMITED`。
+- [x] **JSON body 上限**：`express.json` 使用 `HTTP_JSON_BODY_MAX_BYTES`（默认 256 KiB），与 **`KB_UPLOAD_MAX_BYTES`**（multipart）独立；超限 **413**、`PAYLOAD_TOO_LARGE`。
+- [x] **结构化日志**：`pino` + `pino-http`；响应头 **`X-Request-Id`**（或请求传入的 `x-request-id`），错误 JSON 含 **`requestId`** 便于与日志关联。请勿在业务中 `console.log` 完整 PDF 或完整 prompt；密钥类头在日志配置中 redact。
+- [x] **方舟超时**：`ARK_REQUEST_TIMEOUT_MS`（默认 120s）作用于对话与嵌入；超时映射 **504**、`ARK_TIMEOUT`（流式 SSE 的 `error` 帧同码）。
+- [x] **Readiness**：**`GET /readyz`** 尝试读取 `kb_store/manifest.json`（不调用方舟）；**`GET /healthz`** 仍为轻量进程探活。二者区别见 **`docs/KB_API.md`**。
+- [ ] **集中日志 / 脱敏审计**：将 pino 输出接入 ELK / Loki 等；审计字段与保留周期按合规要求由运维配置。
+- [ ] **WAF / Bot 防护**、**mTLS / 私有链路**：由入口网关或云厂商完成，本仓库仅文档约定。
+
 ### 前端验证与 E2E（O2）
 
-- **页面内**：顶部横幅展示最近一次成功/失败；对话区、上传区有 **loading / 禁用 / 内联成功条**；折叠面板 **「连接自检」** 可顺序探测 `GET /healthz`、`POST /v1/sessions`、`GET /v1/sessions/:id`；可选勾选 **「包含一条模型调用」** 会 `POST .../messages`（消耗方舟配额）。错误文案会区分 **401 / 413 / 429 / 5xx** 等，并隐藏可能的 **Bearer** 片段。  
+- **页面内**：顶部横幅展示最近一次成功/失败；对话区、上传区有 **loading / 禁用 / 内联成功条**；折叠面板 **「连接自检」** 可顺序探测 `GET /healthz`、`GET /readyz`、`POST /v1/sessions`、`GET /v1/sessions/:id`；可选勾选 **「包含一条模型调用」** 会 `POST .../messages`（消耗方舟配额）。错误文案会区分 **401 / 413 / 429 / 504 / 5xx** 等，并隐藏可能的 **Bearer** 片段。  
 - **Playwright**：根目录执行 **`pnpm test:e2e:install`**（首次安装 Chromium），再 **`pnpm test:e2e`**。默认会拉起 **`pnpm serve`**（端口 **`E2E_API_PORT`，默认 `18790`，避免与开发常用 8787 冲突）与 **`pnpm dev:web`**（5173，经 `VITE_API_PORT` 代理到同一 API 端口）；若本机已在跑对应服务，会复用（`reuseExistingServer`）。  
 - **跳过条件**：未配置 **`ARK_API_KEY`** 时套件内用例会 **skip**（不失败）；或设置 **`E2E_SKIP=1`** 跳过（**不启动** webServer，适合 CI 无浏览器/无密钥）。CI 无密钥时可设 `E2E_SKIP=1`。**MSW mock** 未接入；若需无密钥跑通 UI，可自行加 mock 或扩展用例。
 

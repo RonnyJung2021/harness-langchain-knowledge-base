@@ -7,6 +7,7 @@ export function createArkChat(cfg: ArkEnvConfig): ChatOpenAI {
     model: cfg.chatModel,
     temperature: 0.2,
     apiKey: cfg.apiKey,
-    configuration: { baseURL: cfg.baseUrl },
+    timeout: cfg.requestTimeoutMs,
+    configuration: { baseURL: cfg.baseUrl, timeout: cfg.requestTimeoutMs },
   });
 }

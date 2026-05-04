@@ -12,6 +12,7 @@ export default defineConfig({
     proxy: {
       "/v1": { target: apiOrigin, changeOrigin: true },
       "/healthz": { target: apiOrigin, changeOrigin: true },
+      "/readyz": { target: apiOrigin, changeOrigin: true },
     },
   },
   build: {

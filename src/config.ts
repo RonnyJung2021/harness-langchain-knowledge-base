@@ -32,6 +32,19 @@ function parseEmbedDimensions(): 1024 | 2048 {
   return 1024;
 }
 
+/** 方舟 HTTP 调用超时（毫秒），用于对话、嵌入与多模态 fetch。 */
+export function readArkRequestTimeoutMs(): number {
+  const raw = process.env.ARK_REQUEST_TIMEOUT_MS?.trim();
+  if (raw === undefined || raw === "") {
+    return 120_000;
+  }
+  const n = Number.parseInt(raw, 10);
+  if (!Number.isFinite(n) || n < 5000 || n > 600_000) {
+    return 120_000;
+  }
+  return n;
+}
+
 export type ArkEmbedInputMode = "multimodal" | "text";
 
 export type ArkEnvConfig = {
@@ -43,6 +56,8 @@ export type ArkEnvConfig = {
   embedInputMode: ArkEmbedInputMode;
   /** 多模态模型向量维度，须与方舟控制台一致 */
   embedDimensions: 1024 | 2048;
+  /** 单次方舟请求超时（毫秒），见 {@link readArkRequestTimeoutMs} */
+  requestTimeoutMs: number;
 };
 
 /**
@@ -68,5 +83,6 @@ export function loadArkConfig(): ArkEnvConfig {
     embedModel,
     embedInputMode: parseEmbedInputMode(),
     embedDimensions: parseEmbedDimensions(),
+    requestTimeoutMs: readArkRequestTimeoutMs(),
   };
 }

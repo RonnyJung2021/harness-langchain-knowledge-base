@@ -97,7 +97,7 @@ export function createV1KbReplaceRouter(ctx: ChatServerContext): Router {
           await reloadVectorStoreIntoRagDeps(ctx.repoRoot, ctx.arkConfig, ctx.ragTurnDeps);
         } catch (e) {
           ctx.ragTurnDeps.vectorStore = oldVs;
-          console.error("VECTOR_RELOAD_FAILED", e);
+          req.log?.error({ err: e }, "VECTOR_RELOAD_FAILED");
           throw new HttpError(
             500,
             "VECTOR_RELOAD_FAILED",

@@ -6,6 +6,15 @@
 
 **前置**：已执行 `pnpm ingest` 写入 `kb_store`；已配置方舟 `ARK_*` 环境变量，否则 `POST .../messages` 会返回 `502` 及 `error.code: UPSTREAM`。
 
+**探活与就绪**
+
+- **`GET /healthz`**：不读盘、不调方舟；`200` `{ "ok": true, "ts": "..." }`，用于进程存活。
+- **`GET /readyz`**：尝试读取仓库内 **`kb_store/manifest.json`**（轻量就绪）；成功 `200` `{ "ok": true, "kbManifestReadable": true, "ts": "...", "requestId"?: "..." }`；未入库或不可读 **`503`**，`error.code: NOT_READY`。不替代 `healthz`。
+
+**错误体**：多数 JSON 错误为 `{ "error": { "code": "...", "message": "...", "requestId"?: "..." } }`，`requestId` 与响应头 **`X-Request-Id`** 一致（便于与 pino 日志关联）。常见：`429` **`RATE_LIMITED`**（消息接口限流，见 `HTTP_RATE_LIMIT_*`）；`413` **`PAYLOAD_TOO_LARGE`**（JSON body 超限，见 `HTTP_JSON_BODY_MAX_BYTES`）；`504` **`ARK_TIMEOUT`**（方舟 HTTP 超时，见 `ARK_REQUEST_TIMEOUT_MS`）。
+
+环境变量说明见仓库根 **`.env.example`** 与 **`README.md`**「生产 checklist」。
+
 ---
 
 ## 1. 创建会话

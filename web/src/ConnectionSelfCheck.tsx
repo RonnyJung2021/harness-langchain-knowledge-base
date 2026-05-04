@@ -49,6 +49,14 @@ export function ConnectionSelfCheck() {
       }),
     );
 
+    out.push(
+      await runStep("GET /readyz", async () => {
+        const r = await fetch("/readyz");
+        const text = await r.text();
+        return { ok: r.ok, status: r.status, detail: text.slice(0, 200) };
+      }),
+    );
+
     let sid = "";
     out.push(
       await runStep("POST /v1/sessions", async () => {

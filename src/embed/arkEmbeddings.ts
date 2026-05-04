@@ -13,7 +13,8 @@ export function createArkEmbeddings(cfg: ArkEnvConfig): Embeddings {
     return new OpenAIEmbeddings({
       model: cfg.embedModel,
       apiKey: cfg.apiKey,
-      configuration: { baseURL: cfg.baseUrl },
+      timeout: cfg.requestTimeoutMs,
+      configuration: { baseURL: cfg.baseUrl, timeout: cfg.requestTimeoutMs },
     });
   }
   return new ArkMultimodalEmbeddings({
@@ -21,5 +22,6 @@ export function createArkEmbeddings(cfg: ArkEnvConfig): Embeddings {
     baseUrl: cfg.baseUrl,
     model: cfg.embedModel,
     dimensions: cfg.embedDimensions,
+    timeoutMs: cfg.requestTimeoutMs,
   });
 }

@@ -7,6 +7,8 @@ export type ArkMultimodalEmbeddingsParams = {
   dimensions: 1024 | 2048;
   /** embedDocuments 时并发请求上限 */
   concurrency?: number;
+  /** 单次 fetch 超时（毫秒），默认 120000 */
+  timeoutMs?: number;
 };
 
 /**
@@ -25,12 +27,15 @@ export class ArkMultimodalEmbeddings extends Embeddings {
 
   private readonly concurrency: number;
 
+  private readonly timeoutMs: number;
+
   constructor(params: ArkMultimodalEmbeddingsParams) {
     super({});
     this.apiKey = params.apiKey;
     this.model = params.model;
     this.dimensions = params.dimensions;
     this.concurrency = Math.max(1, params.concurrency ?? 4);
+    this.timeoutMs = Math.max(1000, params.timeoutMs ?? 120_000);
     const base = params.baseUrl.replace(/\/+$/, "");
     // 多模态向量化须走专用路径，与标准 OpenAI /embeddings（纯字符串 input）不同
     this.url = `${base}/embeddings/multimodal`;
@@ -51,6 +56,7 @@ export class ArkMultimodalEmbeddings extends Embeddings {
         "Content-Type": "application/json",
       },
       body: JSON.stringify(body),
+      signal: AbortSignal.timeout(this.timeoutMs),
     });
     const raw = await res.text();
     if (!res.ok) {

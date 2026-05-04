@@ -10,6 +10,7 @@ import type { RagTurnDeps } from "../chat/ragTurn.js";
 import { createInMemorySessionStore } from "../chat/sessionStore.js";
 import { getRepoRoot } from "../paths/repoRoot.js";
 import { createApp } from "./app.js";
+import { createRootLogger } from "./logger.js";
 import { createPerSessionExclusive } from "./sessionExclusive.js";
 import { createReplaceKbExclusive } from "./replaceKbExclusive.js";
 
@@ -28,6 +29,7 @@ function readPort(): number {
 }
 
 async function bootstrap(): Promise<void> {
+  const logger = createRootLogger();
   const { cfg, ragCfg, embeddings, vectorStore } = await loadKbRagContext();
 
   const ragTurnDeps: RagTurnDeps = {
@@ -53,26 +55,29 @@ async function bootstrap(): Promise<void> {
       arkConfig: cfg,
       enqueueKbReplace,
     },
-    webOpts,
+    { ...webOpts, logger },
   );
 
   const port = readPort();
   const server = http.createServer(app);
 
   server.on("error", (err: NodeJS.ErrnoException) => {
-    console.error("HTTP server error:", err);
+    logger.error({ err }, "HTTP server error");
     if (err.code === "EADDRINUSE") {
-      console.error(`端口 ${String(port)} 已被占用，请修改环境变量 PORT 或结束占用进程。`);
+      logger.error(`端口 ${String(port)} 已被占用，请修改环境变量 PORT 或结束占用进程。`);
     }
     process.exit(1);
   });
 
   server.listen(port, () => {
-    console.error(`HTTP 监听端口 ${String(port)}（GET /healthz、/v1/sessions …）`);
+    logger.info(
+      { port },
+      `HTTP 监听端口 ${String(port)}（GET /healthz、GET /readyz、/v1/sessions …）`,
+    );
   });
 
   function shutdown(signal: string): void {
-    console.error(`收到 ${signal}，正在关闭…`);
+    logger.info({ signal }, "收到关闭信号");
     server.close(() => {
       process.exit(0);
     });
@@ -90,6 +95,7 @@ async function bootstrap(): Promise<void> {
 }
 
 bootstrap().catch((err: unknown) => {
-  console.error(err instanceof Error ? err.message : err);
+  const logger = createRootLogger();
+  logger.fatal({ err }, err instanceof Error ? err.message : String(err));
   process.exit(1);
 });
