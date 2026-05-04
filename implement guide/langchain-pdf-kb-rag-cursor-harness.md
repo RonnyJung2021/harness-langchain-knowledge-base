@@ -114,6 +114,14 @@ pnpm run build 必须通过。
 添加 scripts 中的 ingest:smoke：用一个最小 PDF（若没有就生成一个只含几十字中文的 PDF 到 pdfs/_smoke.pdf）跑 ingest 并在末尾打印 kb_store 文件大小与 chunk 数断言（chunk>0）。README 增加「验收」一节说明该命令。
 ```
 
+#### C2 补充（Harness：工具契约与多模态向量）
+
+对齐 harness 实践中的 **「工具治理 / 任务契约显式化」**：嵌入能力不是「一律 OpenAI 标准 `input: string`」，而由环境变量声明调用形态。
+
+- **默认**：`ARK_EMBED_INPUT_MODE` 省略或为 `multimodal` 时，入库与问答侧对 `ARK_EMBED_MODEL` 使用方舟**多模态向量化**协议：`POST {ARK_BASE_URL}/embeddings/multimodal`（不是 `/embeddings`）。请求体中 `input` 为片段数组；纯文本块为 `[{ "type": "text", "text": "<块文本>" }]`（仅文本、无图时也可只含 `type:text` 一项）。`ARK_EMBED_DIMENSIONS` 取 `1024` 或 `2048`，须与控制台该接入点一致。
+- **可选**：若接入点为**纯文本** OpenAI 兼容 Embeddings，设置 `ARK_EMBED_INPUT_MODE=text`，则走 `POST .../embeddings` 与标准字符串 `input` 路径。
+- **验收不变**：`pnpm ingest:smoke` 仍表示「管道末端有 chunk、kb_store 有落盘」；失败时根据 HTTP 状态与响应体做**错误分类**（鉴权、维度、模型与 API 形态不匹配等），便于人在环上修正 `.env`。
+
 ---
 
 ## 5. 阶段 D：问答循环（RAG + 国内大模型）

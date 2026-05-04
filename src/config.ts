@@ -16,11 +16,33 @@ function normalizeBaseUrl(url: string): string {
   return url.replace(/\/+$/, "");
 }
 
+function parseEmbedInputMode(): ArkEmbedInputMode {
+  const raw = process.env.ARK_EMBED_INPUT_MODE?.trim().toLowerCase();
+  if (raw === "text") {
+    return "text";
+  }
+  return "multimodal";
+}
+
+function parseEmbedDimensions(): 1024 | 2048 {
+  const raw = process.env.ARK_EMBED_DIMENSIONS?.trim();
+  if (raw === "2048") {
+    return 2048;
+  }
+  return 1024;
+}
+
+export type ArkEmbedInputMode = "multimodal" | "text";
+
 export type ArkEnvConfig = {
   apiKey: string;
   baseUrl: string;
   chatModel: string;
   embedModel: string;
+  /** 多模态向量模型须用结构化 input；纯文本端点用 text */
+  embedInputMode: ArkEmbedInputMode;
+  /** 多模态模型向量维度，须与方舟控制台一致 */
+  embedDimensions: 1024 | 2048;
 };
 
 /**
@@ -44,5 +66,7 @@ export function loadArkConfig(): ArkEnvConfig {
     baseUrl,
     chatModel,
     embedModel,
+    embedInputMode: parseEmbedInputMode(),
+    embedDimensions: parseEmbedDimensions(),
   };
 }

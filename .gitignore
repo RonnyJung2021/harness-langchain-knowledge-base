@@ -10,3 +10,6 @@ dist/
 # 向量与元数据 JSON 不入库；保留 kb_store/.gitkeep
 kb_store/*.json
 
+# ingest:smoke 生成的最小 PDF
+pdfs/_smoke.pdf
+
