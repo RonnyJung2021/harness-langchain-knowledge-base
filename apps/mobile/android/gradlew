@@ -117,6 +117,52 @@ esac
 
 CLASSPATH=$APP_HOME/gradle/wrapper/gradle-wrapper.jar
 
+#
+# macOS: Gradle 8.10 + RN/Expo are validated on JDK 17–21. A system JAVA_HOME pointing at
+# JDK 23+ (or early-access) commonly triggers Groovy build-script failures such as:
+#   Unsupported class file major version 70
+# Prefer Android Studio's bundled JBR when JAVA_HOME is unset or refers to JDK 23+.
+# Override explicitly with EXPO_ANDROID_JAVA_HOME or ORG_GRADLE_JAVA_HOME.
+#
+if [ "$darwin" = true ]; then
+    _kb_rag_preferred_java_home=""
+    if [ -n "${EXPO_ANDROID_JAVA_HOME:-}" ] && [ -x "${EXPO_ANDROID_JAVA_HOME}/bin/java" ]; then
+        _kb_rag_preferred_java_home=${EXPO_ANDROID_JAVA_HOME}
+    elif [ -n "${ORG_GRADLE_JAVA_HOME:-}" ] && [ -x "${ORG_GRADLE_JAVA_HOME}/bin/java" ]; then
+        _kb_rag_preferred_java_home=${ORG_GRADLE_JAVA_HOME}
+    else
+        for _kb_rag_jbr in \
+            "/Applications/Android Studio.app/Contents/jbr/Contents/Home" \
+            "${HOME}/Applications/Android Studio.app/Contents/jbr/Contents/Home"
+        do
+            if [ -x "${_kb_rag_jbr}/bin/java" ]; then
+                _kb_rag_preferred_java_home=${_kb_rag_jbr}
+                break
+            fi
+        done
+    fi
+
+    if [ -n "${_kb_rag_preferred_java_home}" ]; then
+        if [ -z "${JAVA_HOME:-}" ]; then
+            JAVA_HOME=${_kb_rag_preferred_java_home}
+        else
+            _kb_rag_java_line=$( "${JAVA_HOME}/bin/java" -version 2>&1 | head -n 1 ) || true
+            _kb_rag_java_major=""
+            case ${_kb_rag_java_line} in
+                *version\ \"1.*)
+                    _kb_rag_java_major=8
+                    ;;
+                *)
+                    _kb_rag_java_major=$( printf '%s\n' "${_kb_rag_java_line}" | sed -n 's/.* version "\([0-9][0-9]*\).*/\1/p' )
+                    ;;
+            esac
+            if [ -n "${_kb_rag_java_major}" ] && [ "${_kb_rag_java_major}" -ge 23 ] 2>/dev/null; then
+                JAVA_HOME=${_kb_rag_preferred_java_home}
+            fi
+        fi
+    fi
+    unset _kb_rag_preferred_java_home _kb_rag_jbr _kb_rag_java_line _kb_rag_java_major
+fi
 
 # Determine the Java command to use to start the JVM.
 if [ -n "$JAVA_HOME" ] ; then
@@ -140,6 +186,19 @@ else
 
 Please set the JAVA_HOME variable in your environment to match the
 location of your Java installation."
+    fi
+fi
+
+#
+# Default Android SDK when ANDROID_HOME / ANDROID_SDK_ROOT are unset (matches Android Studio installs).
+#
+if [ -z "${ANDROID_HOME:-}" ] && [ -z "${ANDROID_SDK_ROOT:-}" ]; then
+    if [ -d "${HOME}/Library/Android/sdk" ]; then
+        ANDROID_HOME=${HOME}/Library/Android/sdk
+        export ANDROID_HOME
+    elif [ -d "${HOME}/Android/Sdk" ]; then
+        ANDROID_HOME=${HOME}/Android/Sdk
+        export ANDROID_HOME
     fi
 fi
 

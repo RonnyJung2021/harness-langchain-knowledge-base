@@ -1,0 +1,8 @@
+# Copy to local.properties (gitignored) if Gradle cannot find your SDK.
+# Uncomment and set an absolute path:
+#
+# macOS default (Android Studio): /Users/<you>/Library/Android/sdk
+# Linux default: /home/<you>/Android/Sdk
+# Windows (escape backslashes): C\:\\Users\\<you>\\AppData\\Local\\Android\\Sdk
+#
+# sdk.dir=/absolute/path/to/Android/sdk
