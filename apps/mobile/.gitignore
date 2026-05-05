@@ -1,6 +1,12 @@
 .expo/
 dist/
 *.log
+
+# Expo prebuild / CocoaPods — Pods 由 `pod install` 本地生成，勿入库
+ios/Pods/
+ios/build/
+*.xcworkspace/xcuserdata/
+*.xcodeproj/xcuserdata/
 *.jks
 *.p8
 *.p12

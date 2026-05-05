@@ -12,6 +12,9 @@
     "scheme": "kb-rag-mobile",
     "android": {
       "package": "com.anonymous.kbragmobile"
+    },
+    "ios": {
+      "bundleIdentifier": "com.anonymous.kbragmobile"
     }
   }
 }
