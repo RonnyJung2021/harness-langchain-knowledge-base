@@ -37,6 +37,22 @@ pnpm ask -- "这份资料的核心结论是什么？"
 
 HTTP JSON 契约见 **`docs/KB_API.md`**。
 
+### Docker（阶段 Q，开发 / 演示）
+
+1. 复制 **`cp .env.example .env`** 并填写方舟相关变量；**不要将含密钥的 `.env` 打进镜像**（已在 `.dockerignore` 忽略）。  
+2. **`./kb_store` 中须有已 ingest 的向量**（`vectors.json` / `manifest.json`），否则进程启动时会报错；可将本机已有 `kb_store` 挂入容器，或先在宿主机执行 `pnpm ingest` 再启动 compose。  
+3. 启动：**`docker compose up --build`**，浏览器访问 **http://127.0.0.1:8787**（静态页 + 同源 **`/v1`**）。Compose 已映射 **`8787:8787`**，并通过 **`env_file: .env`** 注入环境变量。  
+4. **数据卷**：`./kb_store` → `/app/kb_store`、`./sessions` → `/app/sessions`、`./kb_uploads` → `/app/kb_uploads`（上传替换 PDF 时写入）。  
+5. **运行身份**：镜像最终阶段为 **`node:20-alpine`**，主进程以 **`USER node`**（非 root）执行 **`node dist/server/main.js`**。  
+6. **健康检查**：compose 内对 **`GET /healthz`** 配置了 **`healthcheck`**（镜像内使用 `wget`）。
+
+**容器重启后会话是否还在？**
+
+- **未设置 `ARK_SESSION_PERSIST=1`**：会话只在**当前进程内存**中；**重启即丢失**，与是否挂载 `sessions` 目录无关。  
+- **`ARK_SESSION_PERSIST=1`**：新消息会写入 **`sessions/{sessionId}.json`**。此时是否跨重启保留，取决于是否挂载 **`./sessions:/app/sessions`**：  
+  - **已挂载**：文件写在宿主机目录上，**重启容器后会话文件仍在**（同一 `sessionId` 可继续用）。  
+  - **未挂载**：数据写在容器可写层，**重建或删除容器后通常丢失**；不建议依赖未挂载的落盘路径。
+
 ### 生产 checklist（阶段 P）
 
 上线前逐项核对；已实现项已勾选，其余留空待网关 / 运维补齐。

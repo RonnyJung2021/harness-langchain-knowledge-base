@@ -1,0 +1,32 @@
+.git
+.gitignore
+
+**/node_modules
+dist
+web/dist
+
+.env
+.env.*
+!.env.example
+web/.env.local
+
+# 运行时状态与上传（由 compose 卷挂载提供）
+kb_store
+sessions
+kb_uploads
+
+# 体积大或无需打入镜像的 PDF / 测试产物
+*.pdf
+pdfs/
+test-results/
+playwright-report/
+
+.cursor
+implement guide
+
+Dockerfile*
+docker-compose*.yml
+compose*.yaml
+
+README.md
+docs/

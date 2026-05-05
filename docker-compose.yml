@@ -1,0 +1,23 @@
+services:
+  kb-rag:
+    build: .
+    ports:
+      - "8787:8787"
+    env_file:
+      - .env
+    volumes:
+      - ./kb_store:/app/kb_store
+      - ./sessions:/app/sessions
+      - ./kb_uploads:/app/kb_uploads
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "wget",
+          "-qO-",
+          "http://127.0.0.1:8787/healthz",
+        ]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
