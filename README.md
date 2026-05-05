@@ -7,7 +7,7 @@
 1. 将 PDF 放入目录 `pdfs/`。  
 2. 复制 `cp .env.example .env`，填写 `ARK_API_KEY` 等变量。  
 3. 安装依赖：`pnpm install`（若报 `ERR_PNPM_IGNORED_BUILDS` 与 esbuild，在仓库根执行一次 **`pnpm approve-builds --all`** 后再 `pnpm install`）。  
-4. 编译：`pnpm run build`（可选：`pnpm test` 跑 `@kb-rag/api-core` 离线占位单测）  
+4. 编译：`pnpm run build`（可选：**`pnpm test`** 依次跑 **`@kb-rag/api-core`**、**`@kb-rag/client-offline-core`**、**`@kb-rag/app-shared`**；**不要求**配置 `ARK_API_KEY`）  
 5. 入库：`pnpm ingest -- pdfs/某文件.pdf`  
 6. 提问（需已有 `kb_store/vectors.json`）：
 
@@ -29,6 +29,27 @@ pnpm ask -- "这份资料的核心结论是什么？"
 - **离线模式嵌入**：**`AI_RUNTIME_MODE=offline`**（或 **`RUNTIME_MODE=offline`**）时默认使用**确定性哈希伪向量**（非真实语义模型），检索质量显著弱于在线方舟嵌入；详见 **`.env.example`** 中 **`OFFLINE_STUB_EMBED_DIM`** 说明。可选 **`LOCAL_CHAT_BASE_URL`** 指向本机 OpenAI 兼容对话接口（如 Ollama）；不可用时报 **`OFFLINE_CHAT_UNAVAILABLE`**（503）。
 
 换书、清空向量、环境变量与安全边界等运维约定见 **`docs/KB_OPERATIONS.md`**。多轮对话的**历史条数与参考资料长度裁剪**（`ARK_CHAT_MAX_HISTORY_MESSAGES`、`ARK_RAG_CONTEXT_MAX_CHARS`）见该文档 **「6. 多轮与裁剪」**。
+
+### 离线模式：服务端 vs 端内完全离线
+
+| 模式 | 含义 | 你需要什么 |
+|------|------|------------|
+| **服务端 `AI_RUNTIME_MODE=offline`（或 `RUNTIME_MODE=offline`）** | Node 上的 **Express 仍提供 `/v1`**；RAG 仍走后端流水线，嵌入/对话可走桩实现（非方舟语义）。 | 根目录 **`.env`** + **`pnpm serve`**；详见 **`.env.example`** 中 **`OFFLINE_STUB_EMBED_DIM`**、**`LOCAL_CHAT_*`** 等。 |
+| **端内完全离线（Web / RN）** | 浏览器或 App **不依赖当前网络访问方舟**；用本机拉取的 **manifest + vectors 快照** 做检索 + **占位回答**；会话可用 **仅客户端生成的 session id**。 | ① 在线时在 **「连接自检」** 面板点击 **「同步知识库到本机」**（`GET /v1/knowledge-base/bundle`，需 **Admin Token** 与已入库的 `kb_store`）② 打开 **「主动使用离线模式」**（偏好持久化：**Web `localStorage` / RN `AsyncStorage`**，键前缀 **`kb-rag-offline:v1`**，实现见 **`packages/app-shared`**）③ 点 **新本地会话** 后再在对话区发送。 |
+
+**端内存储位置**
+
+- **Web**：**IndexedDB**（`@kb-rag/client-offline-core` 的 **`createWebIndexedDbKbBundleStore()`**），在 **`apps/web/src/App.tsx`** 注入 **`KbWorkspaceApp`**。细节见 **`apps/web/README.md`**「端内离线」。
+- **RN（Android / iOS）**：**应用文档目录**下的向量 JSON 分片 + **AsyncStorage** 指针，见 **`apps/mobile/src/storage/rnKbBundleStore.ts`**，在 **`apps/mobile/App.tsx`** 注入。
+
+**Web 离线 smoke（新贡献者最短路径）**
+
+1. 终端 A：根目录 **`pnpm serve`**（需已有 **`kb_store`**、根 **`.env`** 中 **`HTTP_ADMIN_TOKEN`** 等）。  
+2. 终端 B：**`pnpm dev:web`**，浏览器打开 **`http://127.0.0.1:5173`**。  
+3. 配置 **`apps/web/.env.local`** 中 **`VITE_HTTP_ADMIN_TOKEN`**，与服务端 **`HTTP_ADMIN_TOKEN`** 一致。  
+4. 打开 **「工具」** → **「连接自检」**：先 **同步知识库到本机** → 勾选 **主动使用离线模式** → **新本地会话** → 打开 DevTools **Offline**，在对话区发送一条问题；应得到本机 **stub 回答** 与 **引用摘要**。若从未同步，应出现 **中文横幅** 提示先同步（不应白屏或崩溃）。  
+
+更全的手工矩阵见 **`project-atlas/offline-phase5-6-7-acceptance.md`**。可选 **`pnpm test:e2e`**（可能需 **`ARK_API_KEY`** 或设 **`E2E_SKIP=1`**，见下文「前端验证与 E2E」）。
 
 ### 可视化网页（Vite + React，极简）
 

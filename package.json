@@ -7,8 +7,10 @@
   "scripts": {
     "build": "pnpm -r run build",
     "typecheck": "pnpm -r run typecheck",
-    "test": "pnpm --filter @kb-rag/api-core test",
+    "test": "pnpm run test:api-core && pnpm run test:client-offline && pnpm run test:app-shared",
+    "test:api-core": "pnpm --filter @kb-rag/api-core test",
     "test:client-offline": "pnpm --filter @kb-rag/client-offline-core test",
+    "test:app-shared": "pnpm --filter @kb-rag/app-shared test",
     "gen:offline-golden-fixture": "tsx scripts/gen-offline-golden-fixture.ts",
     "golden:local-retrieve": "tsx scripts/compare-local-retrieve-golden.ts",
     "ingest": "pnpm --filter @kb-rag/api-core run ingest",

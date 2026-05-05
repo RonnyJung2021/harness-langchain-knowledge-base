@@ -6,8 +6,8 @@
 
 ## 1. 摘要
 
-- **业务侧一句话**：本地 PDF 知识库入库与问答（RAG），默认对接火山方舟 API，支持离线桩模式与可选会话落盘。
-- **技术侧一句话**：pnpm monorepo（ESM + TypeScript strict），`@kb-rag/api-core` 承载 LangChain 流水线；`kb-rag-server`（Express）提供同源 REST + 可选托管 Vite 产物；Web（Vite + React + react-native-web）与 Mobile（Expo + RN）共享 `@kb-rag/app-shared` 与 `@kb-rag/design-system`。
+- **业务侧一句话**：本地 PDF 知识库入库与问答（RAG），默认对接火山方舟 API，支持服务端离线桩模式、**端内完全离线**（同步快照 + 本机 RAG）与可选会话落盘。
+- **技术侧一句话**：pnpm monorepo（ESM + TypeScript strict），`@kb-rag/api-core` 承载 LangChain 流水线；`kb-rag-server`（Express）提供同源 REST + 可选托管 Vite 产物；Web（Vite + React + react-native-web）与 Mobile（Expo + RN）共享 **`@kb-rag/app-shared`**、**`@kb-rag/client-offline-core`** 与 **`@kb-rag/design-system`**。
 
 ## 2. 仓库拓扑
 
@@ -24,7 +24,8 @@
 | `apps/web` | Vite + React 18 浏览器端；`react-native` 解析到 `react-native-web`；代理 `/v1`、`/healthz`、`/readyz` 到本机 API。 |
 | `apps/mobile` | Expo 52 + RN 0.76 客户端；复用 `app-shared` / `design-system`；`EXPO_PUBLIC_*` 配置 API 基址与上传鉴权。 |
 | `packages/api-core` | PDF 解析、向量存储、ingest/ask/chat CLI、RAG 轮次、方舟/离线 Provider；编译产物供 server 与脚本引用。 |
-| `packages/shared` | 跨端 HTTP 形状、错误类型等共享库（tsc 产出 `dist`）。 |
+| `packages/shared` | 跨端 HTTP 形状、错误类型、端内离线 UI 文案码等共享库（tsc 产出 `dist`）。 |
+| `packages/client-offline-core` | 端内离线 RAG 内核：桩嵌入、余弦检索、`runLocalRagTurn`、`KbBundleStore`（Web IndexedDB 等）；**无 Node 专属 API**，供 `app-shared` / Web 注入使用。 |
 | `packages/app-shared` | Web/RN 共用业务 UI 与 hooks（peer：`react`、`react-native`）。 |
 | `packages/design-system` | 共用设计系统 primitive（peer 同 app-shared）。 |
 | `scripts/` | 烟测入库、smoke PDF 生成等辅助脚本。 |
@@ -82,14 +83,15 @@
 - **ingest / 向量库**：`packages/api-core`（PDF → chunk → 嵌入 → `kb_store`）。
 - **对话与会话**：`api-core` 的 chat/RAG 轮次 + `apps/server` 的 `/v1/sessions` 路由与内存会话存储。
 - **知识库替换**：`api-core` 的 replace + `apps/server` 的 `/v1` 下 KB 路由（见 `app.ts` 挂载）。
-- **跨端 UI**：`design-system` → `app-shared` → `web` / `mobile`；`web` 额外通过 Vite alias 直连 workspace 源码路径。
+- **跨端 UI**：`design-system` → `app-shared` → `web` / `mobile`；`web` 通过 Vite alias 直连 **`app-shared` / `client-offline-core` / `shared`** 等 workspace 源码路径。
+- **端内离线**：`client-offline-core`（检索 + 占位回答 + 存储抽象）由 `app-shared` 组合；`web` 在入口注入 IndexedDB `KbBundleStore`，`mobile` 注入 RN 文件系统实现。
 
 ### 引用关系（依赖方向）
 
 - `kb-rag-server` → `@kb-rag/api-core`、`@kb-rag/shared`
-- `kb-rag-web` → `@kb-rag/app-shared`、`@kb-rag/design-system`、`@kb-rag/shared`
+- `kb-rag-web` → `@kb-rag/app-shared`、`@kb-rag/client-offline-core`、`@kb-rag/design-system`、`@kb-rag/shared`
 - `kb-rag-mobile` → `@kb-rag/app-shared`、`@kb-rag/design-system`、`@kb-rag/shared`
-- `@kb-rag/app-shared` → `@kb-rag/design-system`、`@kb-rag/shared`
+- `@kb-rag/app-shared` → `@kb-rag/client-offline-core`、`@kb-rag/design-system`、`@kb-rag/shared`
 - `@kb-rag/api-core` → `@kb-rag/shared`
 - **Docker 生产镜像**：仅复制并构建 `shared`、`api-core`、`server`、`web`（见根 `Dockerfile`）；**不包含** `apps/mobile` 产物。
 
@@ -109,7 +111,7 @@
 - **Web 与 RN 共享 UI**：通过 `app-shared` + `design-system` 与 peerDependencies 对齐 React/RN 主版本（升级需注意双 React 实例风险——根 `README.md` 生产 checklist 已提示）。
 - **Vite 直连源码**：`apps/web/vite.config.ts` 将 `@kb-rag/*` alias 到 `packages/.../src/index.ts`，属开发/构建约定。
 - **Lint / Format**：仓库内未发现根级 `eslint` / `prettier` / `biome` 配置文件（**待确认**：是否依赖编辑器默认或未提交配置）。
-- **测试**：`@kb-rag/api-core` 的 `test` 脚本当前为占位（`package.json` 内 `node -e`）；实质验证依赖 Playwright 与文档中的 smoke 流程。
+- **测试**：根目录 **`pnpm test`** 链式执行 **`@kb-rag/api-core`**（当前脚本为占位 `node -e`）、**`@kb-rag/client-offline-core`**（Vitest：stubEmbed、localRetrieve、runLocalRagTurn 等相关单测）、**`@kb-rag/app-shared`**（Vitest：`effectiveOffline` 等）；**不要求 `ARK_API_KEY`**。E2E 仍见 **`pnpm test:e2e`** 与文档 smoke。
 
 ## 8. 基础设施
 
