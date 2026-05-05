@@ -277,6 +277,12 @@ README 写明：Web 与 API 同源；移动端浏览器访问与桌面同一域�
 验收：飞行模式或错误 Base URL 下仍有可读失败原因。
 ```
 
+**实现说明（仓库现状）**：
+
+- **`packages/app-shared/src/panels/DiagnosticsPanel.tsx`**：顺序 **GET /healthz** → **GET /v1/runtime-info**（404 时给出「可选端点未部署」说明，不阻断后续）→ **POST /v1/sessions** → **GET /v1/sessions/:id**（有 `sessionId` 时）→ 可选 **POST …/messages**（短消息 `ping`）。每步展示 **耗时、HTTP 状态、error.code（若有）**。  
+- **`diagnosticsHelpers.ts`**：**`formatDiagnosticsApiBaseUrl`**（隐藏 userinfo 密码段、截断路径；Web 空 base 显示同源说明）；**`parseHttpBodyForDiagnostics`** 解析 **`error.code` / `error.message`**。  
+- Native **未配置 Base URL** 时顶部警告；**fetch 抛错**附飞行模式 / 局域网提示（**`Platform.OS !== 'web'`**）。
+
 ### W2. 测试矩阵（文档化）
 
 **目的**：Harness **可重复验证**。
