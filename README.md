@@ -25,13 +25,16 @@ pnpm ask -- "这份资料的核心结论是什么？"
 
 - **HTTP 429 / Too Many Requests**：方舟侧限流或配额紧张。请稍后再试、降低调用频率，或在控制台检查用量与套餐。  
 - **PDF 入库后 chunk 很少或问答答非所问**：常见原因是 PDF **只有扫描图、没有可选中文字**（无文本层）。请换用带文字层的 PDF，或对扫描件做 OCR 后再入库。  
-- **检索不到片段**：可调低环境变量 **`ARK_RAG_SCORE_MIN`**（默认 `0.35`），或改写问题；也可调大 **`ARK_RAG_TOP_K`**（默认 `4`）并配合更具体问题。
+- **检索不到片段**：可调低环境变量 **`ARK_RAG_SCORE_MIN`**（默认 `0.35`），或改写问题；也可调大 **`ARK_RAG_TOP_K`**（默认 `4`）并配合更具体问题。  
+- **离线模式嵌入**：**`AI_RUNTIME_MODE=offline`**（或 **`RUNTIME_MODE=offline`**）时默认使用**确定性哈希伪向量**（非真实语义模型），检索质量显著弱于在线方舟嵌入；详见 **`.env.example`** 中 **`OFFLINE_STUB_EMBED_DIM`** 说明。可选 **`LOCAL_CHAT_BASE_URL`** 指向本机 OpenAI 兼容对话接口（如 Ollama）；不可用时报 **`OFFLINE_CHAT_UNAVAILABLE`**（503）。
 
 换书、清空向量、环境变量与安全边界等运维约定见 **`docs/KB_OPERATIONS.md`**。多轮对话的**历史条数与参考资料长度裁剪**（`ARK_CHAT_MAX_HISTORY_MESSAGES`、`ARK_RAG_CONTEXT_MAX_CHARS`）见该文档 **「6. 多轮与裁剪」**。
 
 ### 可视化网页（Vite + React，极简）
 
-- **双进程开发**：终端 A 根目录执行 **`pnpm serve`**（默认 `8787`，需已有 `kb_store` 与根目录 `.env`）；终端 B 执行 **`pnpm dev:web`**，浏览器打开 **http://127.0.0.1:5173**（Vite 将 `/v1`、`/healthz`、`/readyz` 代理到 `127.0.0.1:8787`）。  
+- **同源（生产）**：静态 SPA 与 REST API（`/v1`、`/healthz`、`/readyz` 等）由**同一 Express 进程、同一 Origin** 提供；中间件顺序与 v3 一致——**先注册 `/v1` 等 API，再 `express.static(apps/web/dist)`，最后 SPA fallback 到 `index.html`**（`/v1` 不会被 fallback 吞掉）。实现见 **`apps/server/src/app.ts`**，`main.ts` 中前端产物路径为 **`apps/web/dist`**（workspace 下对应原 v3 的 `web/dist`）。  
+- **同一域名（浏览器）**：**手机浏览器与桌面浏览器共用同一 URL/域名**，靠响应式布局适配；不做 UA 跳转到独立 m 站。开发阶段例外：Vite 开发服务器在 **5173**，通过代理访问 API（**8788**），属于跨端口本地调试。  
+- **双进程开发**：终端 A 根目录执行 **`pnpm serve`**（默认 `8788`，需已有 `kb_store` 与根目录 `.env`）；终端 B 执行 **`pnpm dev:web`**，浏览器打开 **http://127.0.0.1:5173**（Vite 将 `/v1`、`/healthz`、`/readyz` 代理到 `127.0.0.1:8788`）。  
 - **替换知识库**：页面使用 `POST /v1/knowledge-base/replace`，需在 **`apps/web/.env.local`** 配置 **`VITE_HTTP_ADMIN_TOKEN`**，与根目录服务端 **`HTTP_ADMIN_TOKEN`** 一致；**勿将 `apps/web/.env.local` 提交到 git**（已在 `.gitignore`）。生产环境请用短期票据、同源 Cookie 或网关鉴权，避免把长期 token 打进前端静态包。  
 - **单进程生产**：先 **`pnpm run build && pnpm run build:web`**，再只跑 **`pnpm serve`**：Express 在挂载 `/v1` 后托管 **`apps/web/dist`**，并对非 `/v1` 的 `GET` 回退到 **`index.html`**（静态资源与 API 不冲突）。
 
@@ -46,22 +49,22 @@ HTTP JSON 契约见 **`docs/KB_API.md`**。
 
 ### React Native（v4，Expo）
 
-- **目录**：**`apps/mobile/`**（Expo + TypeScript）；依赖 workspace **`@kb-rag/shared`**，REST 与 Web 一致。
-- **启动**：仓库根 **`pnpm dev:mobile`**（会先构建 shared）；环境变量见 **`apps/mobile/.env.example`**（`EXPO_PUBLIC_API_BASE_URL`、上传用的 **`EXPO_PUBLIC_HTTP_ADMIN_TOKEN`**）。
-- **Android 模拟器**访问本机 API：通常使用 **`http://10.0.2.2:8787`**（详见 `apps/mobile/README.md`）。
+- **目录**：**`apps/mobile/`**（Expo + TypeScript）；依赖 **`@kb-rag/app-shared`**、**`@kb-rag/design-system`**，REST 与 Web 一致；构建与环境变量见 **`apps/mobile/README.md`**。
+- **启动**：仓库根 **`pnpm dev:mobile`**（会先构建 workspace 包）；环境变量见 **`apps/mobile/.env.example`**（`EXPO_PUBLIC_API_BASE_URL`、上传用的 **`EXPO_PUBLIC_HTTP_ADMIN_TOKEN`**）；**勿**将方舟密钥写入 **`EXPO_PUBLIC_*`**。
+- **Android 模拟器**访问本机 API：通常使用 **`http://10.0.2.2:8788`**（详见 `apps/mobile/.env.example`）。
 
 ### 临时修改端口（避免「address already in use」）
 
-同一台机器上若 **`8787` 已被占用**（例如已运行 **`pnpm serve`**），可选用下列方式之一：
+同一台机器上若 **`8788` 已被占用**（例如已运行 **`pnpm serve`**），可选用下列方式之一：
 
-**Docker Compose（推荐与本机 dev 错开）**
+**Docker Compose（与本机 dev 默认同为 8788 时，可改宿主映射错开）**
 
-- 默认映射为 **`8788:8787`**（宿主机 **8788** → 容器内仍监听 **8787**），浏览器打开 **http://127.0.0.1:8788**。  
+- 默认映射为 **`8788:8788`**（宿主机 **8788** → 容器内 **`PORT` 默认 8788**），浏览器打开 **http://127.0.0.1:8788**。  
 - **临时一行命令**（不改文件）：  
   `KB_RAG_HOST_PORT=8790 docker compose up --build` → 访问 **http://127.0.0.1:8790**。  
 - **在 `.env` 里统一改**（compose 会自动读仓库根 `.env` 做插值）：同时设定 **`KB_RAG_HOST_PORT`**（宿主机对外端口）与 **`PORT`**（容器内监听端口）。二者通常设为**同一个数字**即可，例如：  
   `KB_RAG_HOST_PORT=8790` 与 `PORT=8790` → 映射为 **8790:8790**，访问 **http://127.0.0.1:8790**。  
-  若只想改宿主机端口、保持容器内仍为 8787：只设 **`KB_RAG_HOST_PORT=8790`**，勿改 **`PORT`**。
+  若只想改宿主机对外端口、容器内仍用默认 **`PORT`（8788）**：只设 **`KB_RAG_HOST_PORT=8790`**，勿改 **`PORT`**。
 
 **本机 `pnpm serve` / Vite 双进程**
 
@@ -76,7 +79,7 @@ HTTP JSON 契约见 **`docs/KB_API.md`**。
 
 1. 复制 **`cp .env.example .env`** 并填写方舟相关变量；**不要将含密钥的 `.env` 打进镜像**（已在 `.dockerignore` 忽略）。  
 2. **`./kb_store` 中须有已 ingest 的向量**（`vectors.json` / `manifest.json`），否则进程启动时会报错；可将本机已有 `kb_store` 挂入容器，或先在宿主机执行 `pnpm ingest` 再启动 compose。  
-3. 启动：**`docker compose up --build`**，浏览器访问 **http://127.0.0.1:8788**（默认映射 **`8788:8787`**，静态页 + 同源 **`/v1`**）。可通过 **`KB_RAG_HOST_PORT`** / **`PORT`** 调整，见上文「临时修改端口」。Compose 通过 **`env_file: .env`** 向容器注入环境变量。  
+3. 启动：**`docker compose up --build`**，浏览器访问 **http://127.0.0.1:8788**（默认映射 **`8788:8788`**，静态页 + 同源 **`/v1`**）。可通过 **`KB_RAG_HOST_PORT`** / **`PORT`** 调整，见上文「临时修改端口」。Compose 通过 **`env_file: .env`** 向容器注入环境变量。  
 4. **数据卷**：`./kb_store` → `/app/kb_store`、`./sessions` → `/app/sessions`、`./kb_uploads` → `/app/kb_uploads`（上传替换 PDF 时写入）。  
 5. **运行身份**：镜像最终阶段为 **`node:20-alpine`**，主进程以 **`USER node`**（非 root）执行 **`node apps/server/dist/main.js`**。  
 6. **健康检查**：compose 内对 **`GET /healthz`** 配置了 **`healthcheck`**（镜像内使用 `wget`）。
@@ -103,7 +106,7 @@ HTTP JSON 契约见 **`docs/KB_API.md`**。
 ### 前端验证与 E2E（O2）
 
 - **页面内**：顶部横幅展示最近一次成功/失败；对话区、上传区有 **loading / 禁用 / 内联成功条**；折叠面板 **「连接自检」** 可顺序探测 `GET /healthz`、`GET /readyz`、`POST /v1/sessions`、`GET /v1/sessions/:id`；可选勾选 **「包含一条模型调用」** 会 `POST .../messages`（消耗方舟配额）。错误文案会区分 **401 / 413 / 429 / 504 / 5xx** 等，并隐藏可能的 **Bearer** 片段。  
-- **Playwright**：根目录执行 **`pnpm test:e2e:install`**（首次安装 Chromium），再 **`pnpm test:e2e`**。默认会拉起 **`pnpm serve`**（端口 **`E2E_API_PORT`，默认 `18790`，避免与开发常用 8787 冲突）与 **`pnpm dev:web`**（5173，经 `VITE_API_PORT` 代理到同一 API 端口）；若本机已在跑对应服务，会复用（`reuseExistingServer`）。  
+- **Playwright**：根目录执行 **`pnpm test:e2e:install`**（首次安装 Chromium），再 **`pnpm test:e2e`**。默认会拉起 **`pnpm serve`**（端口 **`E2E_API_PORT`，默认 `18790`，避免与开发常用 8788 冲突）与 **`pnpm dev:web`**（5173，经 `VITE_API_PORT` 代理到同一 API 端口）；若本机已在跑对应服务，会复用（`reuseExistingServer`）。  
 - **跳过条件**：未配置 **`ARK_API_KEY`** 时套件内用例会 **skip**（不失败）；或设置 **`E2E_SKIP=1`** 跳过（**不启动** webServer，适合 CI 无浏览器/无密钥）。CI 无密钥时可设 `E2E_SKIP=1`。**MSW mock** 未接入；若需无密钥跑通 UI，可自行加 mock 或扩展用例。
 
 ### 多轮对话与会话落盘（可选）

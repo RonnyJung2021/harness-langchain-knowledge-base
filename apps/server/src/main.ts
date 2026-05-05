@@ -1,21 +1,22 @@
-import "dotenv/config";
+import "./loadRootEnv.js";
 import fs from "node:fs";
 import http from "node:http";
 import path from "node:path";
 import process from "node:process";
 import {
+  computeAiRuntimeInfo,
   createInMemorySessionStore,
   createRagDeps,
   getRepoRoot,
   loadKbRagContext,
+  parseAiRuntimeMode,
 } from "@kb-rag/api-core";
-import { parseRuntimeMode } from "@kb-rag/shared";
 import { createApp } from "./app.js";
 import { createRootLogger } from "./logger.js";
 import { createPerSessionExclusive } from "./sessionExclusive.js";
 import { createReplaceKbExclusive } from "./replaceKbExclusive.js";
 
-const DEFAULT_PORT = 8787;
+const DEFAULT_PORT = 8788;
 
 function readPort(): number {
   const raw = process.env.PORT?.trim();
@@ -31,7 +32,8 @@ function readPort(): number {
 
 async function bootstrap(): Promise<void> {
   const logger = createRootLogger();
-  const runtimeMode = parseRuntimeMode(process.env.RUNTIME_MODE);
+  const runtimeMode = parseAiRuntimeMode(process.env);
+  const runtimeInfo = computeAiRuntimeInfo(process.env, runtimeMode);
   const loaded = await loadKbRagContext(runtimeMode);
   const ragTurnDeps = createRagDeps({ mode: runtimeMode, loaded });
 
@@ -39,6 +41,7 @@ async function bootstrap(): Promise<void> {
   const enqueueSession = createPerSessionExclusive();
   const enqueueKbReplace = createReplaceKbExclusive();
   const repoRoot = getRepoRoot();
+  /** v3/v4 约定：Vite 产出目录为 `apps/web/dist`（workspace 迁移后与旧 `web/dist` 对齐） */
   const webDist = path.join(repoRoot, "apps", "web", "dist");
   const webOpts = fs.existsSync(path.join(webDist, "index.html")) ? { webDist } : undefined;
   const app = createApp(
@@ -50,6 +53,7 @@ async function bootstrap(): Promise<void> {
       arkConfig: loaded.cfg,
       enqueueKbReplace,
       runtimeMode,
+      runtimeInfo,
     },
     { ...webOpts, logger },
   );
@@ -67,8 +71,11 @@ async function bootstrap(): Promise<void> {
 
   server.listen(port, () => {
     logger.info(
-      { port },
-      `HTTP 监听端口 ${String(port)}（GET /healthz、GET /readyz、/v1/sessions …）`,
+      {
+        port,
+        spaStatic: webOpts?.webDist ?? null,
+      },
+      `HTTP 监听端口 ${String(port)}（GET /healthz、GET /readyz、/v1/sessions …）${webOpts !== undefined ? "；已挂载同源 SPA（apps/web/dist）" : "；未检测到 apps/web/dist/index.html，仅 API/探活"}`,
     );
   });
 

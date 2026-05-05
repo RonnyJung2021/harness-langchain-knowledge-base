@@ -4,10 +4,15 @@ import { fileURLToPath } from "node:url";
 import { defineConfig } from "vite";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
+/**
+ * 将 `import … from "react-native"` 映射到 react-native-web（与 RN Web 文档一致）。
+ * 使用 **目录绝对路径** 而非裸 `"react-native-web"`，避免个别 Rollup/Vite 解析到错误入口；
+ * 详见 `apps/web/README.md`「Metro-less 限制」。
+ */
 const reactNativeWebRoot = path.resolve(__dirname, "node_modules/react-native-web");
 
-/** Playwright / 本机多实例时可通过环境变量指向其它 API 端口（默认 8787） */
-const apiPort = process.env.VITE_API_PORT ?? "8787";
+/** Playwright / 本机多实例时可通过环境变量指向其它 API 端口（默认 8788） */
+const apiPort = process.env.VITE_API_PORT ?? "8788";
 const apiOrigin = `http://127.0.0.1:${apiPort}`;
 
 export default defineConfig({

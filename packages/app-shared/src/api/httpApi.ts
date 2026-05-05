@@ -1,6 +1,6 @@
 import type { ApiErrorBody, CitationSummary } from "@kb-rag/shared";
-import { joinApiPath } from "@kb-rag/shared";
 import { describeHttpFailure, sanitizeForUi } from "../httpFeedback.js";
+import { resolveApiUrl } from "./apiClient.js";
 
 export type ApiRequestErrorInit = {
   status: number;
@@ -41,17 +41,8 @@ function parseErrorBody(parsed: unknown): { code?: string; message?: string } {
   return { code, message };
 }
 
-function resolveUrl(apiBaseUrl: string, path: string): string {
-  const rel = path.startsWith("/") ? path : `/${path}`;
-  const joined = joinApiPath(apiBaseUrl, rel);
-  if (joined.startsWith("/")) {
-    return joined;
-  }
-  return joined;
-}
-
 export async function fetchJson<T>(apiBaseUrl: string, path: string, init?: RequestInit): Promise<T> {
-  const url = resolveUrl(apiBaseUrl, path);
+  const url = resolveApiUrl(apiBaseUrl, path);
   let res: Response;
   try {
     res = await fetch(url, init);
@@ -178,7 +169,7 @@ export async function postSessionMessageStream(
     }
   };
 
-  const url = resolveUrl(apiBaseUrl, `/v1/sessions/${sessionId}/messages:stream`);
+  const url = resolveApiUrl(apiBaseUrl, `/v1/sessions/${sessionId}/messages:stream`);
 
   let res: Response;
   try {

@@ -172,7 +172,7 @@ pnpm run build 通过。
 增加可选 dev 服务：使用最简依赖（如 hono 或 express 任选其一），实现 src/server.ts：
 - POST /ingest body: { path: string } 调用现有入库逻辑（限制 path 必须在 pdfs/ 下，防止路径穿越）
 - POST /ask body: { question: string } 返回 JSON：{ citations: [...], answer: string }
-- 端口 8787，pnpm dev:server 启动
+- 端口 8788，pnpm dev:server 启动
 README 说明仅本机使用、无鉴权风险
 
 注意：工具边界与路径校验写在代码里，不依赖模型自觉。

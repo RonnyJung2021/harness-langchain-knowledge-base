@@ -1,7 +1,12 @@
+import { DesignSystemSmoke } from "@kb-rag/design-system";
 import { KbWorkspaceApp } from "@kb-rag/app-shared";
 import { useCallback, useRef } from "react";
 
 export default function App() {
+  if (import.meta.env.VITE_DS_SMOKE === "1") {
+    return <DesignSystemSmoke colorScheme="light" />;
+  }
+
   const inputRef = useRef<HTMLInputElement>(null);
 
   const pickPdfFile = useCallback(() => {

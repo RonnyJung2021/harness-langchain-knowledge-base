@@ -1,13 +1,13 @@
-import { parseRuntimeMode, type RuntimeMode } from "@kb-rag/shared";
+import type { RuntimeMode } from "@kb-rag/shared";
+import { createAiChatInference } from "./ai/factory.js";
+import { parseAiRuntimeMode } from "./ai/mode.js";
 import { buildDefaultRagSystemPrompt } from "./chat/ragFormatting.js";
 import type { KbRagLoadedContext } from "./chat/loadKbRagContext.js";
 import type { RagTurnDeps } from "./chat/ragTurn.js";
-import { OfflineStubInferenceProvider } from "./providers/offline/stubInference.js";
 import type { InferenceProvider } from "./providers/types.js";
-import { VolcanoArkChatProvider } from "./providers/volcano/VolcanoArkChatProvider.js";
 
 function defaultInference(mode: RuntimeMode): InferenceProvider {
-  return mode === "online" ? new VolcanoArkChatProvider() : new OfflineStubInferenceProvider();
+  return createAiChatInference(mode);
 }
 
 /**
@@ -30,9 +30,9 @@ export function createRagDeps(params: {
 }
 
 /**
- * 从环境变量解析 `RUNTIME_MODE` 后构造 {@link RagTurnDeps}。
+ * 从环境变量解析 `AI_RUNTIME_MODE`（回退 `RUNTIME_MODE`）后构造 {@link RagTurnDeps}。
  */
 export function createRagDepsFromEnv(env: NodeJS.ProcessEnv, loaded: KbRagLoadedContext): RagTurnDeps {
-  const mode = parseRuntimeMode(env.RUNTIME_MODE);
+  const mode = parseAiRuntimeMode(env);
   return createRagDeps({ mode, loaded });
 }

@@ -2,7 +2,7 @@
 
 面向已实现阶段 M 的服务端：会话创建、拉取历史、发送一条用户消息并返回模型回答与引用摘要。字段名均为 **camelCase**。
 
-**Base URL**：开发环境一般为 `http://127.0.0.1:8787`（端口由环境变量 `PORT` 控制）。
+**Base URL**：开发环境一般为 `http://127.0.0.1:8788`（端口由环境变量 `PORT` 控制）。
 
 **前置**：已执行 `pnpm ingest` 写入 `kb_store`；已配置方舟 `ARK_*` 环境变量，否则 `POST .../messages` 会返回 `502` 及 `error.code: UPSTREAM`。
 
@@ -10,6 +10,11 @@
 
 - **`GET /healthz`**：不读盘、不调方舟；`200` `{ "ok": true, "ts": "..." }`，用于进程存活。
 - **`GET /readyz`**：尝试读取仓库内 **`kb_store/manifest.json`**（轻量就绪）；成功 `200` `{ "ok": true, "kbManifestReadable": true, "ts": "...", "requestId"?: "..." }`；未入库或不可读 **`503`**，`error.code: NOT_READY`。不替代 `healthz`。
+
+**运行时（不自检方舟 HTTP）**
+
+- **`GET /v1/runtime`**：`200` `{ "mode": "online" | "offline" }`（由 **`AI_RUNTIME_MODE`** 优先，回退 **`RUNTIME_MODE`**）。
+- **`GET /v1/runtime-info`**：`200` `{ "mode": "...", "capabilities": { "chat": true|false, "embeddings": true|false } }`；**不返回密钥**。离线对话不可用时 `capabilities.chat` 可为 `false`（例如 **`LOCAL_CHAT_REQUIRE=1`** 且未配置 **`LOCAL_CHAT_BASE_URL`**）；实际对话仍可能因本地 HTTP 不可达返回 **`503`** **`OFFLINE_CHAT_UNAVAILABLE`**。
 
 **错误体**：多数 JSON 错误为 `{ "error": { "code": "...", "message": "...", "requestId"?: "..." } }`，`requestId` 与响应头 **`X-Request-Id`** 一致（便于与 pino 日志关联）。常见：`429` **`RATE_LIMITED`**（消息接口限流，见 `HTTP_RATE_LIMIT_*`）；`413` **`PAYLOAD_TOO_LARGE`**（JSON body 超限，见 `HTTP_JSON_BODY_MAX_BYTES`）；`504` **`ARK_TIMEOUT`**（方舟 HTTP 超时，见 `ARK_REQUEST_TIMEOUT_MS`）。
 
@@ -30,7 +35,7 @@
 **示例**
 
 ```bash
-curl -sS -X POST http://127.0.0.1:8787/v1/sessions
+curl -sS -X POST http://127.0.0.1:8788/v1/sessions
 ```
 
 ---
@@ -69,8 +74,8 @@ curl -sS -X POST http://127.0.0.1:8787/v1/sessions
 **示例**
 
 ```bash
-SID=$(curl -sS -X POST http://127.0.0.1:8787/v1/sessions | jq -r .sessionId)
-curl -sS "http://127.0.0.1:8787/v1/sessions/${SID}"
+SID=$(curl -sS -X POST http://127.0.0.1:8788/v1/sessions | jq -r .sessionId)
+curl -sS "http://127.0.0.1:8788/v1/sessions/${SID}"
 ```
 
 ---
@@ -114,7 +119,7 @@ curl -sS "http://127.0.0.1:8787/v1/sessions/${SID}"
 **示例（连续两轮）**
 
 ```bash
-BASE=http://127.0.0.1:8787
+BASE=http://127.0.0.1:8788
 SID=$(curl -sS -X POST "${BASE}/v1/sessions" | jq -r .sessionId)
 
 curl -sS -X POST "${BASE}/v1/sessions/${SID}/messages" \
@@ -154,9 +159,9 @@ curl -sS "${BASE}/v1/sessions/${SID}" | jq '.messages | length'
 **curl 示例**（需 `--no-buffer` 才能实时看到 `delta`）：
 
 ```bash
-SID=$(curl -sS -X POST http://127.0.0.1:8787/v1/sessions | jq -r .sessionId)
+SID=$(curl -sS -X POST http://127.0.0.1:8788/v1/sessions | jq -r .sessionId)
 
-curl -sS --no-buffer -X POST "http://127.0.0.1:8787/v1/sessions/${SID}/messages:stream" \
+curl -sS --no-buffer -X POST "http://127.0.0.1:8788/v1/sessions/${SID}/messages:stream" \
   -H 'Content-Type: application/json' \
   -d '{"text":"你好"}'
 ```
@@ -203,7 +208,7 @@ curl -sS --no-buffer -X POST "http://127.0.0.1:8787/v1/sessions/${SID}/messages:
 
 ```bash
 export HTTP_ADMIN_TOKEN=dev-secret   # 与 .env 中一致
-curl -sS -X POST http://127.0.0.1:8787/v1/knowledge-base/replace \
+curl -sS -X POST http://127.0.0.1:8788/v1/knowledge-base/replace \
   -H "Authorization: Bearer ${HTTP_ADMIN_TOKEN}" \
   -F "file=@pdfs/sample.pdf;type=application/pdf"
 ```

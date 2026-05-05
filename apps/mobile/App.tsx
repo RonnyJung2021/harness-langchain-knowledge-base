@@ -1,9 +1,23 @@
+import { DesignSystemSmoke } from "@kb-rag/design-system";
 import { KbWorkspaceApp } from "@kb-rag/app-shared";
 import type { PdfFileLike } from "@kb-rag/app-shared";
 import * as DocumentPicker from "expo-document-picker";
 import { StatusBar } from "expo-status-bar";
 
+/**
+ * Native 入口：`EXPO_PUBLIC_API_BASE_URL` 由 Expo 注入；Web 同源场景在 apps/web 使用 `apiBaseUrl=""`。
+ * 密钥类仅服务端保管，勿使用 EXPO_PUBLIC_*。
+ */
 export default function App() {
+  if (process.env.EXPO_PUBLIC_DS_SMOKE === "1") {
+    return (
+      <>
+        <StatusBar style="auto" />
+        <DesignSystemSmoke colorScheme="light" />
+      </>
+    );
+  }
+
   const base = process.env.EXPO_PUBLIC_API_BASE_URL ?? "";
   const token = process.env.EXPO_PUBLIC_HTTP_ADMIN_TOKEN?.trim();
 
@@ -11,6 +25,7 @@ export default function App() {
     const result = await DocumentPicker.getDocumentAsync({
       type: "application/pdf",
       copyToCacheDirectory: true,
+      multiple: false,
     });
     if (result.canceled) {
       return null;

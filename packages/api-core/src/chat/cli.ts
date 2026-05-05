@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import * as readline from "node:readline";
 import process from "node:process";
-import { parseRuntimeMode } from "@kb-rag/shared";
+import { parseAiRuntimeMode } from "../ai/mode.js";
 import { createRagDeps } from "../ragDeps.js";
 import { explainApiError, formatCitationLine } from "./ragFormatting.js";
 import { loadKbRagContext } from "./loadKbRagContext.js";
@@ -62,7 +62,7 @@ function printTurnOutput(
 }
 
 async function main(): Promise<void> {
-  const mode = parseRuntimeMode(process.env.RUNTIME_MODE);
+  const mode = parseAiRuntimeMode(process.env);
   const loaded = await loadKbRagContext(mode);
   const ragCfg = loaded.ragCfg;
   const deps: RagTurnDeps = createRagDeps({ mode, loaded });

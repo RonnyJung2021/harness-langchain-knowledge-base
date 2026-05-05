@@ -1,5 +1,6 @@
 import type { ScoredDoc } from "../ask/retrieve.js";
 import type { CitationSummary } from "@kb-rag/shared";
+import { OfflineModelUnavailableError } from "../ai/errors.js";
 
 export function metaString(meta: unknown): string {
   if (meta === undefined || meta === null) {
@@ -87,6 +88,9 @@ export function truncateReferencesContextBlock(body: string, maxChars: number): 
 }
 
 export function explainApiError(err: unknown): string {
+  if (err instanceof OfflineModelUnavailableError) {
+    return "（离线对话不可用：请检查 LOCAL_CHAT_BASE_URL 与本机 OpenAI 兼容推理服务是否已启动。）";
+  }
   const msg = err instanceof Error ? err.message : String(err);
   const lower = msg.toLowerCase();
   if (msg.includes("429") || lower.includes("too many requests")) {

@@ -1,5 +1,5 @@
 import path from "node:path";
-import { parseRuntimeMode } from "@kb-rag/shared";
+import { parseAiRuntimeMode } from "./ai/mode.js";
 import { ingestPdfFromAbsolutePath } from "./ingestPdfFromAbsolutePath.js";
 import { getRepoRoot } from "./paths/repoRoot.js";
 import { resolveEmbeddingForIngest } from "./providers/resolveEmbedding.js";
@@ -36,7 +36,7 @@ async function main(): Promise<void> {
   const userArg = parsePdfPathFromArgv();
   const absPdf = resolvePdfPath(repoRoot, userArg);
 
-  const mode = parseRuntimeMode(process.env.RUNTIME_MODE);
+  const mode = parseAiRuntimeMode(process.env);
   const existingRows = await readSerializedVectors(repoRoot);
   const manifest = await readManifest(repoRoot);
   const { provider, manifestEmbeddingModel } = resolveEmbeddingForIngest(mode, existingRows);

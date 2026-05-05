@@ -3,6 +3,7 @@ import { Router, type NextFunction, type Request, type Response } from "express"
 import {
   assertValidUuidSessionId,
   explainApiError,
+  OfflineModelUnavailableError,
   runRagChatTurn,
   runRagChatTurnStream,
 } from "@kb-rag/api-core";
@@ -53,6 +54,9 @@ function parseMessageTextBody(req: Request, maxChars: number): string {
 }
 
 function mapRagFailureToHttpError(e: unknown): HttpError {
+  if (e instanceof OfflineModelUnavailableError) {
+    return new HttpError(503, e.bizCode, e.message);
+  }
   if (isLikelyArkOrNetworkTimeout(e)) {
     return new HttpError(
       504,

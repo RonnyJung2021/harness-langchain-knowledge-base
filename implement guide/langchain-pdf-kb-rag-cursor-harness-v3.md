@@ -52,11 +52,11 @@
    - 导出 createApp(): 返回配置好中间件与路由的 Express 应用实例
    - GET /healthz → 200 { "ok": true, "ts": "<ISO8601>" }（不调用方舟，避免探活扣费）
    - 使用 express.json()；全局 JSON 错误处理：未捕获异常映射为 500 { "error": { "code": "INTERNAL", "message": "..." } }；业务错误用 4xx + 稳定 code（可用自定义 Error 子类 + 中间件统一转换）
-3) 新建 src/server/main.ts：读取 PORT（默认 8787），http.createServer(app).listen；优雅关闭 SIGTERM/SIGINT
+3) 新建 src/server/main.ts：读取 PORT（默认 8788），http.createServer(app).listen；优雅关闭 SIGTERM/SIGINT
 4) package.json 增加 "serve": "tsx src/server/main.ts"（路径以实际为准）
 5) 不要在本步实现聊天与上传，仅保证 pnpm run build 与 pnpm serve 可启动，curl /healthz 成功
 
-验收：pnpm run build；pnpm serve 后 curl -s http://127.0.0.1:8787/healthz 返回 ok。
+验收：pnpm run build；pnpm serve 后 curl -s http://127.0.0.1:8788/healthz 返回 ok。
 ```
 
 **验收标准**：
@@ -107,7 +107,7 @@
 
 ### M2（可选）：CORS 与前端开发代理
 
-**目的**：本地 Vite 开发时浏览器跨域访问 `8787`。
+**目的**：本地 Vite 开发时浏览器跨域访问 `8788`。
 
 **Agent 输入框粘贴**：
 
@@ -204,7 +204,7 @@
   - 页面：左侧或顶部「当前 session」显示 sessionId；按钮「新会话」调用 POST /v1/sessions
   - 中间：消息列表（user/assistant），底部输入框发送 POST /v1/sessions/:id/messages；展示 citations 折叠区或脚注
   - 「替换知识库」：<input type=file accept=application/pdf> + 上传按钮调用 POST /v1/knowledge-base:replace；开发环境可用 Vite 环境变量注入 Bearer（README 标明**勿提交**）；生产环境优先**短期票据 / 同源 Cookie 会话 / 网关鉴权**，避免将长期 HTTP_ADMIN_TOKEN 编译进前端静态包
-  - 开发：Vite server 将 /v1 代理到 http://127.0.0.1:8787（与 pnpm serve 一致）
+  - 开发：Vite server 将 /v1 代理到 http://127.0.0.1:8788（与 pnpm serve 一致）
   - 生产：pnpm build:web 产出 web/dist；Express 在注册 /v1 路由之后使用 express.static("web/dist")，并对 SPA 使用 fallback 到 index.html（注意 /v1 不得被 fallback 吞掉）
   - package.json 增加 build:web、dev:web；根 README 简短说明「双终端：serve + dev:web」
 
@@ -315,13 +315,13 @@ C) 自动化 E2E（强烈推荐，便于完成后一键验证）
   - stage1：pnpm install --frozen-lockfile（或 npm ci）、pnpm run build、pnpm run build:web
   - stage2：node:20-alpine，复制 node_modules 与编译产物与 web/dist，USER node
   - ENV NODE_ENV=production
-  - EXPOSE 8787
+  - EXPOSE 8788
   - CMD ["node","dist/server/main.js"]（以实际编译输出为准；若用 tsx 生产不推荐）
 
 新增 docker-compose.yml（开发/演示用）：
   - 卷：./kb_store:/app/kb_store、./sessions:/app/sessions、./kb_uploads:/app/kb_uploads
   - env_file: .env
-  - ports: 8787:8787
+  - ports: 8788:8788
 
 根目录 .dockerignore：忽略 .git、node_modules、.env、大 PDF 测试文件等
 
@@ -356,7 +356,7 @@ C) 自动化 E2E（强烈推荐，便于完成后一键验证）
 
 **验收标准**：
 
-- 云上实例 `curl localhost:8787/healthz` 成功；从办公网经 CLB 访问成功（见 R2）。
+- 云上实例 `curl localhost:8788/healthz` 成功；从办公网经 CLB 访问成功（见 R2）。
 
 ### R2. 公网入口、TLS 与 CLB
 

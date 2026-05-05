@@ -142,6 +142,12 @@ app-shared 内若有「侧边栏」：小屏改为底部 Tab 或抽屉（同一�
 README 写明：Web 与 API 同源；移动端浏览器访问与桌面同一域名。
 ```
 
+**实现说明（仓库现状）**：
+
+- **`apps/server/src/main.ts`**：`webDist` 固定为仓库根下 **`apps/web/dist`**（存在 **`index.html`** 时才向 `createApp` 传入，否则仅 API）。  
+- **`apps/server/src/app.ts`**：在全局中间件之后依次挂载 **`/healthz`、`/readyz`、`/v1/runtime`、`/v1/*` 路由** → **`express.static(webDist)`** → **SPA fallback**（`GET` 且路径非 `/v1`、`/healthz`、`/readyz` 时回 **`index.html`**）→ 404 JSON。  
+- **`README.md`**「可视化网页」：已写明生产 **Web 与 API 同源**，以及 **手机浏览器与桌面同一域名/URL**（开发期 5173 代理为例外说明）。
+
 ---
 
 ## 4. 阶段 U：React Native（Android / iOS）
@@ -158,13 +164,21 @@ README 写明：Web 与 API 同源；移动端浏览器访问与桌面同一域�
 新建 apps/mobile（Expo Router 可选）：
 
 1) 依赖 packages/app-shared、packages/design-system；配置相同 babel/typescript paths
-2) 环境变量：EXPO_PUBLIC_API_BASE_URL（例如 https://your-domain 或 http://10.0.2.2:8787 安卓模拟器）；**禁止** EXPO_PUBLIC_* 放方舟 key
+2) 环境变量：EXPO_PUBLIC_API_BASE_URL（例如 https://your-domain 或 http://10.0.2.2:8788 安卓模拟器）；**禁止** EXPO_PUBLIC_* 放方舟 key
 3) app-shared 内 fetch 客户端：默认 relative URL 在 web；Native 用 Config.API_BASE_URL 前缀拼接（抽象 tiny apiClient）
 4) 文件上传：RN 使用 FormData + multipart；处理 Android/iOS 权限与 URI（expo-document-picker 或等价）
 5) 构建说明：eas.json 或本地 expo run:android / run:ios（文档中文）
 
 验收：模拟器上完成一轮会话 +（若 API 可用）上传小 PDF；离线 API 时至少验证 UI 错误提示与 Diagnostics 面板（阶段 W）可展示网络失败。
 ```
+
+**实现说明（仓库现状）**：
+
+- **`apps/mobile`**：Expo 52；依赖 **`@kb-rag/app-shared`** / **`@kb-rag/design-system`**；**`babel-plugin-module-resolver`** + **`tsconfig` paths** 将 `@kb-rag/*` 指向 **`packages/*/src`**（与 Web 直连源码策略对齐）；**`metro.config.js`** `watchFolders` 覆盖仓库根。  
+- **环境变量**：**`apps/mobile/.env.example`**；未配置 **`EXPO_PUBLIC_API_BASE_URL`** 时 **`KbWorkspaceApp`** 在 Native 会通过 **`warnIfNativeMissingApiBase`** 弹出横幅提示（**禁止** `EXPO_PUBLIC_*` 存放方舟密钥——见示例注释）。  
+- **HTTP**：**`packages/app-shared/src/api/apiClient.ts`** 的 **`resolveApiUrl`**（Web 空 base → 相对 `/v1/...`，Native 拼接 **`EXPO_PUBLIC_API_BASE_URL`**）；**`httpApi`** 统一经此解析 URL。  
+- **上传**：**`expo-document-picker`** + **`postKbReplaceMultipart`**（RN **`FormData`** 字段 `{ uri, name, type }`）。  
+- **构建文档 / EAS**：**`apps/mobile/README.md`**（中文）；**`apps/mobile/eas.json`** 占位 profile。
 
 **验收标准**：
 
@@ -213,6 +227,13 @@ README 写明：Web 与 API 同源；移动端浏览器访问与桌面同一域�
 
 验收：AI_RUNTIME_MODE=online 行为与 v3 一致；切换 offline 且本地 stub 可用时 ingest 与 chat 可走通降级路径；offline 依赖缺失时返回清晰 503 + code。
 ```
+
+**实现说明（仓库现状）**：
+
+- **`packages/api-core/src/ai/`**：**`parseAiRuntimeMode`**（**`AI_RUNTIME_MODE`** 优先，回退 **`RUNTIME_MODE`**）、**`ArkLikeChat` / `ArkLikeEmbeddings`**、**`createAiDeps`** / **`createAiChatInference`**、**`OfflineModelUnavailableError`**（503 **`OFFLINE_CHAT_UNAVAILABLE`**）、**`HttpLocalChatProvider`**（OpenAI 兼容本地 HTTP）、**`computeAiRuntimeInfo`**。  
+- **嵌入与 ingest**：**`resolveEmbeddingForIngest`**、**`loadKbRagContext`** 经 **`createAiDeps`** 构造方舟或离线占位嵌入（**`OpenAIEmbeddings`** 仅在 **`VolcanoArkEmbeddingProvider`** 内部使用）；**`runRagChatTurn`** 仍通过 **`RagTurnDeps.inference`**，由 **`createAiChatInference`** 注入。  
+- **HTTP**：**`GET /v1/runtime-info`** → **`{ mode, capabilities: { chat, embeddings } }`**（无密钥）；**`GET /healthz`** 不变。  
+- **`.env.example`**：已补充 **`AI_RUNTIME_MODE`**、**`LOCAL_*`**、**`LOCAL_CHAT_REQUIRE`** 中文说明。
 
 **验收标准**：
 

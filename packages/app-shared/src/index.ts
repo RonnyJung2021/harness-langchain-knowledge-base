@@ -13,3 +13,5 @@ export {
   type ApiRequestErrorInit,
   type PostSessionMessageStreamResult,
 } from "./api/httpApi.js";
+export { resolveApiUrl } from "./api/apiClient.js";
+export { warnIfNativeMissingApiBase } from "./config/nativeApiGuard.js";

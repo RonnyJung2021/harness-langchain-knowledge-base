@@ -1,0 +1,7 @@
+.expo/
+dist/
+*.log
+*.jks
+*.p8
+*.p12
+*.mobileprovision

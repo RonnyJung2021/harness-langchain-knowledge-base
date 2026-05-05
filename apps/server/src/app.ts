@@ -55,6 +55,12 @@ export function createApp(ctx: ChatServerContext, opts?: CreateAppOptions): expr
   app.use(cors(buildCorsOptions()));
   app.use(express.json({ limit: readHttpJsonBodyMaxBytes() }));
 
+  /**
+   * 与 v3 一致的生产挂载顺序（同源单进程）：
+   * 1) 业务与探活 API（含 `/v1/*`）——必须先注册，避免被静态或 SPA fallback 吞掉
+   * 2) `express.static(apps/web/dist)` —— `pnpm build:web` 产物
+   * 3) SPA fallback：`GET` 且非 API 路径 → `index.html`
+   */
   app.get("/healthz", (_req: Request, res: Response) => {
     res.status(200).json({ ok: true, ts: new Date().toISOString() });
   });
@@ -67,6 +73,10 @@ export function createApp(ctx: ChatServerContext, opts?: CreateAppOptions): expr
     res.status(200).json({ mode: ctx.runtimeMode });
   });
 
+  app.get("/v1/runtime-info", (_req: Request, res: Response) => {
+    res.status(200).json(ctx.runtimeInfo);
+  });
+
   app.use("/v1", createV1SessionsRouter(ctx));
   app.use("/v1", createV1KbReplaceRouter(ctx));
 
@@ -77,7 +87,13 @@ export function createApp(ctx: ChatServerContext, opts?: CreateAppOptions): expr
     if (fs.existsSync(indexHtml)) {
       app.use(express.static(abs));
       app.use((req: Request, res: Response, next: NextFunction) => {
-        if (req.method !== "GET" || req.path.startsWith("/v1")) {
+        const p = req.path;
+        if (
+          req.method !== "GET" ||
+          p.startsWith("/v1") ||
+          p === "/healthz" ||
+          p === "/readyz"
+        ) {
           next();
           return;
         }

@@ -1,15 +1,15 @@
 /**
  * 可选冒烟：不经 CLI argv，直接调用 `ingestPdfFromAbsolutePath`。
  * 用法：pnpm ingest:core-smoke -- pdfs/sample.pdf
- * 在线模式需 ARK_*；离线模式设 RUNTIME_MODE=offline。
+ * 在线模式需 ARK_*；离线模式设 AI_RUNTIME_MODE=offline（或 RUNTIME_MODE=offline）。
  */
 import "dotenv/config";
 import path from "node:path";
 import process from "node:process";
-import { parseRuntimeMode } from "@kb-rag/shared";
 import {
   getRepoRoot,
   ingestPdfFromAbsolutePath,
+  parseAiRuntimeMode,
   readManifest,
   readSerializedVectors,
   resolveEmbeddingForIngest,
@@ -35,7 +35,7 @@ async function main(): Promise<void> {
   }
   const repoRoot = getRepoRoot();
   const absPdf = resolvePdfPath(repoRoot, raw);
-  const mode = parseRuntimeMode(process.env.RUNTIME_MODE);
+  const mode = parseAiRuntimeMode(process.env);
   const existingRows = await readSerializedVectors(repoRoot);
   const manifest = await readManifest(repoRoot);
   const { provider, manifestEmbeddingModel } = resolveEmbeddingForIngest(mode, existingRows);

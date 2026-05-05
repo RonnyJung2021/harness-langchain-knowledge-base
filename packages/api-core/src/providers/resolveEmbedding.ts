@@ -1,8 +1,8 @@
 import type { SerializedMemoryVector } from "../store/localVectorStore.js";
-import { OFFLINE_EMBEDDING_MODEL } from "./constants.js";
-import { OfflineStubEmbeddingProvider } from "./offline/stubEmbedding.js";
-import { VolcanoArkEmbeddingProvider } from "./volcano/VolcanoArkEmbeddingProvider.js";
-import type { RuntimeMode } from "@kb-rag/shared";
+import { arkLikeEmbeddingsToEmbeddingProvider } from "../ai/adapters.js";
+import { createAiDeps } from "../ai/factory.js";
+import type { AiRuntimeMode } from "../ai/mode.js";
+import type { EmbeddingProvider } from "./types.js";
 
 const DEFAULT_OFFLINE_DIM = 1024;
 
@@ -30,16 +30,17 @@ export function inferOfflineEmbedDimensions(rows: SerializedMemoryVector[]): num
 }
 
 export function resolveEmbeddingForIngest(
-  mode: RuntimeMode,
+  mode: AiRuntimeMode,
   existingRows: SerializedMemoryVector[],
-): { provider: VolcanoArkEmbeddingProvider | OfflineStubEmbeddingProvider; manifestEmbeddingModel: string } {
-  if (mode === "online") {
-    const p = new VolcanoArkEmbeddingProvider();
-    return { provider: p, manifestEmbeddingModel: p.manifestEmbeddingModelId };
-  }
-  const dim = inferOfflineEmbedDimensions(existingRows);
+): { provider: EmbeddingProvider; manifestEmbeddingModel: string } {
+  const deps = createAiDeps(
+    mode,
+    mode === "offline"
+      ? { offlineEmbedDimensions: inferOfflineEmbedDimensions(existingRows) }
+      : {},
+  );
   return {
-    provider: new OfflineStubEmbeddingProvider(dim),
-    manifestEmbeddingModel: OFFLINE_EMBEDDING_MODEL,
+    provider: arkLikeEmbeddingsToEmbeddingProvider(deps.embeddings),
+    manifestEmbeddingModel: deps.manifestEmbeddingModelId,
   };
 }

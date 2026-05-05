@@ -2,17 +2,23 @@ import { useCallback, useState } from "react";
 import { Box, Pressable, ScrollView, Text, TextInput } from "@kb-rag/design-system";
 import { useTheme } from "@kb-rag/design-system";
 import type { ChatMessage } from "@kb-rag/shared";
+import { composerSafeBottomStyle } from "../layout/composerSafeBottom.js";
 
 export type ChatPanelProps = {
   messages: ChatMessage[];
   busy: boolean;
   sessionReady: boolean;
   onSend: (text: string) => Promise<void>;
+  /**
+   * Web 宽屏：输入条使用 `env(safe-area-inset-bottom)`。
+   * 紧凑布局底部另有 Tab 条承担安全区时设为 false，避免双重留白。
+   */
+  composerUsesViewportSafeBottom?: boolean;
 };
 
 export function ChatPanel(props: ChatPanelProps) {
   const { tokens } = useTheme();
-  const { messages, busy, sessionReady, onSend } = props;
+  const { messages, busy, sessionReady, onSend, composerUsesViewportSafeBottom = true } = props;
   const [draft, setDraft] = useState("");
 
   const submit = useCallback(async () => {
@@ -41,18 +47,26 @@ export function ChatPanel(props: ChatPanelProps) {
                 borderRadius: tokens.radius.sm,
                 alignSelf: m.role === "user" ? "flex-end" : "flex-start",
                 maxWidth: "92%",
+                flexShrink: 1,
                 backgroundColor: m.role === "user" ? tokens.colors.userBubble : tokens.colors.assistantBubble,
               }}
             >
               <Text style={{ fontSize: tokens.fontSize.xs, color: tokens.colors.textMuted, marginBottom: 4 }}>
                 {m.role}
               </Text>
-              <Text style={{ fontSize: tokens.fontSize.sm, color: tokens.colors.text }}>{m.content}</Text>
+              <Text style={{ fontSize: tokens.fontSize.sm, color: tokens.colors.text, flexShrink: 1 }}>
+                {m.content}
+              </Text>
             </Box>
           ))
         )}
       </ScrollView>
-      <Box style={{ flexDirection: "row", alignItems: "flex-end" }}>
+      <Box
+        style={[
+          { flexDirection: "row", alignItems: "flex-end" },
+          composerUsesViewportSafeBottom ? composerSafeBottomStyle() : { paddingBottom: tokens.space.sm },
+        ]}
+      >
         <TextInput
           value={draft}
           editable={sessionReady && !busy}

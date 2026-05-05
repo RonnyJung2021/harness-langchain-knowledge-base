@@ -7,7 +7,7 @@ const rootDir = dirname(fileURLToPath(import.meta.url));
 loadEnv({ path: resolve(rootDir, ".env") });
 
 const skipE2e = process.env.E2E_SKIP === "1";
-/** 与开发默认 8787 错开，避免与本机已占用端口冲突 */
+/** 与开发默认 8788 错开，避免与本机已占用端口冲突 */
 const e2eApiPort = process.env.E2E_API_PORT ?? "18790";
 
 export default defineConfig({

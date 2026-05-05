@@ -1,6 +1,6 @@
 /**
  * 规范化 API 根路径（无末尾 `/`）。
- * @param raw 例如 `http://127.0.0.1:8787` 或空字符串表示同源相对路径
+ * @param raw 例如 `http://127.0.0.1:8788` 或空字符串表示同源相对路径
  */
 export function normalizeApiBaseUrl(raw: string): string {
   const t = raw.trim();

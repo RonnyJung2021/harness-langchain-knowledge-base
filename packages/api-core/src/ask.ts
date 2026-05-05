@@ -1,5 +1,5 @@
 import path from "node:path";
-import { parseRuntimeMode } from "@kb-rag/shared";
+import { parseAiRuntimeMode } from "./ai/mode.js";
 import { createRagDeps } from "./ragDeps.js";
 import { explainApiError, formatCitationLine } from "./chat/ragFormatting.js";
 import { loadKbRagContext } from "./chat/loadKbRagContext.js";
@@ -19,7 +19,7 @@ function parseQuestionFromArgv(): string {
 }
 
 async function main(): Promise<void> {
-  const mode = parseRuntimeMode(process.env.RUNTIME_MODE);
+  const mode = parseAiRuntimeMode(process.env);
   const loaded = await loadKbRagContext(mode);
   const question = parseQuestionFromArgv();
 

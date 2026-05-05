@@ -4,10 +4,9 @@ import type { RuntimeMode } from "@kb-rag/shared";
 import type { ArkEnvConfig } from "../config.js";
 import { getRepoRoot } from "../paths/repoRoot.js";
 import { embeddingProviderToLangChain } from "../providers/embeddingLangChainBridge.js";
-import {
-  inferOfflineEmbedDimensions,
-  resolveEmbeddingForIngest,
-} from "../providers/resolveEmbedding.js";
+import { arkLikeEmbeddingsToEmbeddingProvider } from "../ai/adapters.js";
+import { createAiDeps } from "../ai/factory.js";
+import { inferOfflineEmbedDimensions } from "../providers/resolveEmbedding.js";
 import { loadVolcanoArkEnvConfig } from "../providers/volcano/arkEnv.js";
 import { loadRagRetrievalConfig, type RagRetrievalConfig } from "../ask/ragEnv.js";
 import {
@@ -66,8 +65,13 @@ export async function loadKbRagContext(mode: RuntimeMode): Promise<KbRagLoadedCo
     skipModelIdCheck: mode === "offline",
   });
 
-  const { provider } = resolveEmbeddingForIngest(mode, rows);
-  const embeddings = embeddingProviderToLangChain(provider);
+  const deps = createAiDeps(
+    mode,
+    mode === "offline" ? { offlineEmbedDimensions: offlineDims } : {},
+  );
+  const embeddings = embeddingProviderToLangChain(
+    arkLikeEmbeddingsToEmbeddingProvider(deps.embeddings),
+  );
   const vectorStore = await memoryStoreFromSerialized(embeddings, rows);
 
   return { cfg, ragCfg, embeddings, vectorStore };

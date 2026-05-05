@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import fs from "node:fs/promises";
 import path from "node:path";
-import { parseRuntimeMode } from "@kb-rag/shared";
+import { parseAiRuntimeMode } from "./ai/mode.js";
 import {
   ingestPdfFromAbsolutePath,
   type IngestPdfFromAbsolutePathResult,
@@ -29,7 +29,7 @@ export async function replaceKnowledgeBaseFromUploadedFile(
   const absPdfPath = path.join(uploadsDir, `${id}.pdf`);
   await fs.writeFile(absPdfPath, params.uploadBytes);
 
-  const mode = parseRuntimeMode(process.env.RUNTIME_MODE);
+  const mode = parseAiRuntimeMode(process.env);
   const manifest = await readManifest(repoRoot);
   const existingRows = await readSerializedVectors(repoRoot);
   const { provider, manifestEmbeddingModel } = resolveEmbeddingForIngest(mode, existingRows);
