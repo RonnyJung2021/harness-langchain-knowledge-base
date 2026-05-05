@@ -1,13 +1,13 @@
 import { spawnSync } from "node:child_process";
 import fs from "node:fs/promises";
 import path from "node:path";
-import { getRepoRoot } from "../src/paths/repoRoot.js";
 import {
+  getRepoRoot,
   kbStoreDir,
   manifestPath,
   readManifest,
   vectorsPath,
-} from "../src/store/localVectorStore.js";
+} from "@kb-rag/api-core";
 
 const SMOKE_REL = path.join("pdfs", "_smoke.pdf");
 
@@ -39,7 +39,7 @@ async function ensureSmokePdf(repoRoot: string): Promise<string> {
 
 function runIngest(repoRoot: string): void {
   const tsxCli = path.join(repoRoot, "node_modules", "tsx", "dist", "cli.mjs");
-  const ingestTs = path.join(repoRoot, "src", "ingest.ts");
+  const ingestTs = path.join(repoRoot, "packages", "api-core", "src", "ingest.ts");
   const r = spawnSync(process.execPath, [tsxCli, ingestTs, "--", SMOKE_REL], {
     cwd: repoRoot,
     stdio: "inherit",

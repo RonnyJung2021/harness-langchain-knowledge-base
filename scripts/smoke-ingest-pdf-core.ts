@@ -1,13 +1,19 @@
 /**
- * 可选冒烟：不经 CLI argv，直接调用 `ingestPdfFromAbsolutePath`（需 .env 与方舟可用）。
+ * 可选冒烟：不经 CLI argv，直接调用 `ingestPdfFromAbsolutePath`。
  * 用法：pnpm ingest:core-smoke -- pdfs/sample.pdf
+ * 在线模式需 ARK_*；离线模式设 RUNTIME_MODE=offline。
  */
 import "dotenv/config";
 import path from "node:path";
 import process from "node:process";
-import { loadArkConfig } from "../src/config.js";
-import { ingestPdfFromAbsolutePath } from "../src/ingestPdfFromAbsolutePath.js";
-import { getRepoRoot } from "../src/paths/repoRoot.js";
+import { parseRuntimeMode } from "@kb-rag/shared";
+import {
+  getRepoRoot,
+  ingestPdfFromAbsolutePath,
+  readManifest,
+  readSerializedVectors,
+  resolveEmbeddingForIngest,
+} from "@kb-rag/api-core";
 
 function resolvePdfPath(repoRoot: string, userPath: string): string {
   const abs = path.isAbsolute(userPath)
@@ -29,11 +35,21 @@ async function main(): Promise<void> {
   }
   const repoRoot = getRepoRoot();
   const absPdf = resolvePdfPath(repoRoot, raw);
-  const cfg = loadArkConfig();
+  const mode = parseRuntimeMode(process.env.RUNTIME_MODE);
+  const existingRows = await readSerializedVectors(repoRoot);
+  const manifest = await readManifest(repoRoot);
+  const { provider, manifestEmbeddingModel } = resolveEmbeddingForIngest(mode, existingRows);
+  const skipEmbeddingModelIdCheck =
+    mode === "offline" &&
+    manifest !== null &&
+    manifest.embeddingModel !== manifestEmbeddingModel;
+
   const out = await ingestPdfFromAbsolutePath({
     repoRoot,
     absPdfPath: absPdf,
-    arkConfig: cfg,
+    embeddingProvider: provider,
+    manifestEmbeddingModel,
+    skipEmbeddingModelIdCheck,
   });
   console.log(JSON.stringify(out, null, 2));
 }

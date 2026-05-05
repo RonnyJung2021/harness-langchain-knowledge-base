@@ -1,0 +1,29 @@
+{
+  "name": "kb-rag-mobile",
+  "version": "0.0.1",
+  "private": true,
+  "main": "index.js",
+  "scripts": {
+    "start": "expo start",
+    "android": "expo run:android",
+    "ios": "expo run:ios",
+    "build": "tsc -p tsconfig.json --noEmit",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "@kb-rag/app-shared": "workspace:*",
+    "@kb-rag/design-system": "workspace:*",
+    "@kb-rag/shared": "workspace:*",
+    "expo": "~52.0.31",
+    "expo-document-picker": "~13.0.3",
+    "expo-status-bar": "~2.0.1",
+    "react": "18.3.1",
+    "react-native": "0.76.7"
+  },
+  "devDependencies": {
+    "@babel/core": "^7.26.0",
+    "@types/node": "^22.10.2",
+    "@types/react": "~18.3.12",
+    "typescript": "~5.7.2"
+  }
+}

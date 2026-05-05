@@ -108,4 +108,4 @@ rm -f kb_store/vectors.json kb_store/manifest.json
 | `ARK_CHAT_MAX_HISTORY_MESSAGES` | 可选；默认 `20`。写入模型消息列表时，从会话历史中只取最近 **N** 条，且 **仅统计** `user` 与 `assistant`（不含当前轮正在发送的用户句，也不计 `system` 角色）。历史先按 `createdAt` 升序排序，再取尾部 N 条。 |
 | `ARK_RAG_CONTEXT_MAX_CHARS` | 可选；默认 `12000`。对检索得到的【参考资料】拼接正文设置**总字符上限**；超出时按**片段顺序**（与入库 chunk 展示顺序一致）保留前面的完整片段，截断后续内容并在末尾追加标记 **「后略」**。System 提示中的规则文案单独拼接，参考资料块本身受此上限约束。 |
 
-实现要点：RAG 使用**单条** `SystemMessage` 承载策略与（已裁剪的）参考资料；多轮轮转为 `HumanMessage` / `AIMessage`。详见源码 `src/chat/ragTurn.ts`、`src/chat/ragFormatting.ts`、`src/chat/chatContextEnv.ts`。
+实现要点：RAG 使用**单条** `SystemMessage` 承载策略与（已裁剪的）参考资料；多轮轮转为 `HumanMessage` / `AIMessage`。详见源码 `packages/api-core/src/chat/ragTurn.ts`、`packages/api-core/src/chat/ragFormatting.ts`、`packages/api-core/src/chat/chatContextEnv.ts`。

@@ -1,0 +1,25 @@
+{
+  "name": "知识库 RAG",
+  "short_name": "KB RAG",
+  "description": "本地 PDF 知识库问答（静态外壳可离线；问答依赖后端 API）",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#f4f5f7",
+  "theme_color": "#1a5fb4",
+  "lang": "zh-CN",
+  "icons": [
+    {
+      "src": "/pwa-icons/icon.svg",
+      "sizes": "512x512",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    },
+    {
+      "src": "/pwa-icons/icon.svg",
+      "sizes": "512x512",
+      "type": "image/svg+xml",
+      "purpose": "maskable"
+    }
+  ]
+}

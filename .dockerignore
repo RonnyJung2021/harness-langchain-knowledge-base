@@ -3,12 +3,14 @@
 
 **/node_modules
 dist
-web/dist
+apps/web/dist
+packages/*/dist
+apps/server/dist
 
 .env
 .env.*
 !.env.example
-web/.env.local
+apps/web/.env.local
 
 # 运行时状态与上传（由 compose 卷挂载提供）
 kb_store

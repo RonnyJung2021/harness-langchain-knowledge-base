@@ -148,7 +148,7 @@ curl -sS "${BASE}/v1/sessions/${SID}" | jq '.messages | length'
 
 **客户端说明**：
 
-- 浏览器原生 **`EventSource` 仅支持 GET**，无法携带本接口所需的 **JSON POST body**，因此请使用 **`fetch` + `response.body.getReader()`**（或 axios/fetch 封装）按 SSE 规范以「空行」分隔事件帧；仓库内 React 示例见 `web/src/api.ts` 的 `postSessionMessageStream`。
+- 浏览器原生 **`EventSource` 仅支持 GET**，无法携带本接口所需的 **JSON POST body**，因此请使用 **`fetch` + `response.body.getReader()`**（或 axios/fetch 封装）按 SSE 规范以「空行」分隔事件帧；仓库内 React 示例见 `apps/web/src/api.ts` 的 `postSessionMessageStream`。
 - 若将来改为 GET + query 参数，才可用 `EventSource`；当前定案为 **POST**。
 
 **curl 示例**（需 `--no-buffer` 才能实时看到 `delta`）：
@@ -212,4 +212,4 @@ curl -sS -X POST http://127.0.0.1:8787/v1/knowledge-base/replace \
 
 ## 7. 类型定义（可选）
 
-TypeScript 请求/响应形状见 `src/chat/httpShape.ts`（含 SSE `done` 载荷类型 `SseSessionMessageDonePayload`），与本文 JSON 字段对齐。
+TypeScript 请求/响应形状见 `packages/shared/src/httpShape.ts`（含 SSE `done` 载荷类型 `SseSessionMessageDonePayload`），与本文 JSON 字段对齐。

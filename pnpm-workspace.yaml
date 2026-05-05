@@ -1,6 +1,6 @@
 packages:
-  - .
-  - web
+  - "packages/*"
+  - "apps/*"
 allowBuilds:
   esbuild: true
-  sharp: set this to true or false
+  sharp: true

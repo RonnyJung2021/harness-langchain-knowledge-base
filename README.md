@@ -7,7 +7,7 @@
 1. 将 PDF 放入目录 `pdfs/`。  
 2. 复制 `cp .env.example .env`，填写 `ARK_API_KEY` 等变量。  
 3. 安装依赖：`pnpm install`（若报 `ERR_PNPM_IGNORED_BUILDS` 与 esbuild，在仓库根执行一次 **`pnpm approve-builds --all`** 后再 `pnpm install`）。  
-4. 编译：`pnpm run build`  
+4. 编译：`pnpm run build`（可选：`pnpm test` 跑 `@kb-rag/api-core` 离线占位单测）  
 5. 入库：`pnpm ingest -- pdfs/某文件.pdf`  
 6. 提问（需已有 `kb_store/vectors.json`）：
 
@@ -32,10 +32,23 @@ pnpm ask -- "这份资料的核心结论是什么？"
 ### 可视化网页（Vite + React，极简）
 
 - **双进程开发**：终端 A 根目录执行 **`pnpm serve`**（默认 `8787`，需已有 `kb_store` 与根目录 `.env`）；终端 B 执行 **`pnpm dev:web`**，浏览器打开 **http://127.0.0.1:5173**（Vite 将 `/v1`、`/healthz`、`/readyz` 代理到 `127.0.0.1:8787`）。  
-- **替换知识库**：页面使用 `POST /v1/knowledge-base/replace`，需在 **`web/.env.local`** 配置 **`VITE_HTTP_ADMIN_TOKEN`**，与根目录服务端 **`HTTP_ADMIN_TOKEN`** 一致；**勿将 `web/.env.local` 提交到 git**（已在 `.gitignore`）。生产环境请用短期票据、同源 Cookie 或网关鉴权，避免把长期 token 打进前端静态包。  
-- **单进程生产**：先 **`pnpm run build && pnpm run build:web`**，再只跑 **`pnpm serve`**：Express 在挂载 `/v1` 后托管 **`web/dist`**，并对非 `/v1` 的 `GET` 回退到 **`index.html`**（静态资源与 API 不冲突）。
+- **替换知识库**：页面使用 `POST /v1/knowledge-base/replace`，需在 **`apps/web/.env.local`** 配置 **`VITE_HTTP_ADMIN_TOKEN`**，与根目录服务端 **`HTTP_ADMIN_TOKEN`** 一致；**勿将 `apps/web/.env.local` 提交到 git**（已在 `.gitignore`）。生产环境请用短期票据、同源 Cookie 或网关鉴权，避免把长期 token 打进前端静态包。  
+- **单进程生产**：先 **`pnpm run build && pnpm run build:web`**，再只跑 **`pnpm serve`**：Express 在挂载 `/v1` 后托管 **`apps/web/dist`**，并对非 `/v1` 的 `GET` 回退到 **`index.html`**（静态资源与 API 不冲突）。
 
 HTTP JSON 契约见 **`docs/KB_API.md`**。
+
+### PWA（v4 预留钩子）
+
+- **目录**：**`apps/web/public/`** —— `manifest.webmanifest`、`sw.js`、`pwa-icons/`（占位 SVG 图标，可换 PNG maskable）。
+- **构建产物**：`pnpm build:web` 后，`dist/` 根路径含 manifest 链接（见 **`apps/web/index.html`**）及同名静态文件。
+- **Service Worker**：仅在 **生产构建**（`import.meta.env.PROD`）下由 **`apps/web/src/registerSw.ts`** 注册；**开发模式 `pnpm dev:web` 不注册**，以免干扰 Vite HMR。SW **不缓存 `/v1/*`**，亦不把用户选择的 PDF 写入 Cache API（上传为 POST）。
+- **线上流程**：仍依赖后端提供 `/v1`；页面内已标注「问答仍需后端或 RN」类提示。
+
+### React Native（v4，Expo）
+
+- **目录**：**`apps/mobile/`**（Expo + TypeScript）；依赖 workspace **`@kb-rag/shared`**，REST 与 Web 一致。
+- **启动**：仓库根 **`pnpm dev:mobile`**（会先构建 shared）；环境变量见 **`apps/mobile/.env.example`**（`EXPO_PUBLIC_API_BASE_URL`、上传用的 **`EXPO_PUBLIC_HTTP_ADMIN_TOKEN`**）。
+- **Android 模拟器**访问本机 API：通常使用 **`http://10.0.2.2:8787`**（详见 `apps/mobile/README.md`）。
 
 ### 临时修改端口（避免「address already in use」）
 
@@ -53,9 +66,9 @@ HTTP JSON 契约见 **`docs/KB_API.md`**。
 **本机 `pnpm serve` / Vite 双进程**
 
 - API：**`PORT=8790 pnpm serve`**  
-- 前端代理：终端 B 执行 **`VITE_API_PORT=8790 pnpm dev:web`**（与 **`web/vite.config.ts`** 中默认代理一致）。
+- 前端代理：终端 B 执行 **`VITE_API_PORT=8790 pnpm dev:web`**（与 **`apps/web/vite.config.ts`** 中默认代理一致）。
 
-**本机单进程（`pnpm serve` 已托管 `web/dist`）**
+**本机单进程（`pnpm serve` 已托管 `apps/web/dist`）**
 
 - **`PORT=8790 pnpm serve`**，浏览器 **http://127.0.0.1:8790**。
 
@@ -65,7 +78,7 @@ HTTP JSON 契约见 **`docs/KB_API.md`**。
 2. **`./kb_store` 中须有已 ingest 的向量**（`vectors.json` / `manifest.json`），否则进程启动时会报错；可将本机已有 `kb_store` 挂入容器，或先在宿主机执行 `pnpm ingest` 再启动 compose。  
 3. 启动：**`docker compose up --build`**，浏览器访问 **http://127.0.0.1:8788**（默认映射 **`8788:8787`**，静态页 + 同源 **`/v1`**）。可通过 **`KB_RAG_HOST_PORT`** / **`PORT`** 调整，见上文「临时修改端口」。Compose 通过 **`env_file: .env`** 向容器注入环境变量。  
 4. **数据卷**：`./kb_store` → `/app/kb_store`、`./sessions` → `/app/sessions`、`./kb_uploads` → `/app/kb_uploads`（上传替换 PDF 时写入）。  
-5. **运行身份**：镜像最终阶段为 **`node:20-alpine`**，主进程以 **`USER node`**（非 root）执行 **`node dist/server/main.js`**。  
+5. **运行身份**：镜像最终阶段为 **`node:20-alpine`**，主进程以 **`USER node`**（非 root）执行 **`node apps/server/dist/main.js`**。  
 6. **健康检查**：compose 内对 **`GET /healthz`** 配置了 **`healthcheck`**（镜像内使用 `wget`）。
 
 **容器重启后会话是否还在？**

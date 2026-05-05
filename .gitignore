@@ -4,6 +4,8 @@ prompt.md
 _tmp_*
 
 node_modules/
+.pnpm-store/
+*.tsbuildinfo
 dist/
 .env
 
@@ -21,8 +23,10 @@ kb_uploads/*
 !kb_uploads/.gitkeep
 
 # 前端 Vite 构建产物与本地密钥（勿提交）
-web/dist
-web/.env.local
+apps/web/dist
+apps/web/.env.local
+packages/*/dist
+apps/server/dist
 
 # Playwright
 /test-results/

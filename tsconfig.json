@@ -1,15 +1,9 @@
 {
+  "extends": "./tsconfig.base.json",
   "compilerOptions": {
-    "target": "ES2022",
-    "lib": ["ES2022", "DOM"],
-    "module": "Node16",
-    "moduleResolution": "node16",
-    "rootDir": "src",
-    "outDir": "dist",
-    "strict": true,
-    "esModuleInterop": true,
-    "skipLibCheck": true,
-    "forceConsistentCasingInFileNames": true
+    "noEmit": true,
+    "rootDir": ".",
+    "lib": ["ES2022"]
   },
-  "include": ["src/**/*.ts"]
+  "include": ["scripts/**/*.ts"]
 }
