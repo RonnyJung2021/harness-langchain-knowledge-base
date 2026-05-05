@@ -1,161 +1,249 @@
-# kb-rag-local
+# 📚 KB RAG Local（kb-rag-local）
 
-本地 PDF 知识库问答（ingest + ask RAG 流水线；依赖方舟 API）。
+> **把 PDF 变成可对话的知识库**——LangChain 驱动的本地 RAG 流水线，可选火山方舟在线嵌入与对话，也支持服务端/端内离线闭环。
 
-## 使用说明
+[![TypeScript](https://img.shields.io/badge/TypeScript-5.7-3178C6?logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
+[![pnpm](https://img.shields.io/badge/pnpm-workspaces-F69220?logo=pnpm&logoColor=white)](https://pnpm.io/workspaces)
+[![LangChain](https://img.shields.io/badge/LangChain-1.x-121212)](https://js.langchain.com/)
+[![Express](https://img.shields.io/badge/Express-5-000000?logo=express&logoColor=white)](https://expressjs.com/)
+[![Version](https://img.shields.io/badge/version-0.0.1-slate.svg)](package.json)
 
-1. 将 PDF 放入目录 `pdfs/`。  
-2. 复制 `cp .env.example .env`，填写 `ARK_API_KEY` 等变量。  
-3. 安装依赖：`pnpm install`（若报 `ERR_PNPM_IGNORED_BUILDS` 与 esbuild，在仓库根执行一次 **`pnpm approve-builds --all`** 后再 `pnpm install`）。  
-4. 编译：`pnpm run build`（可选：**`pnpm test`** 依次跑 **`@kb-rag/api-core`**、**`@kb-rag/client-offline-core`**、**`@kb-rag/app-shared`**；**不要求**配置 `ARK_API_KEY`）  
-5. 入库：`pnpm ingest -- pdfs/某文件.pdf`  
-6. 提问（需已有 `kb_store/vectors.json`）：
+---
+
+## 📋 项目概述
+
+**一句话**：基于 **LangChain** 的 PDF 入库、向量检索与多轮对话；由 **Express** 暴露统一 `/v1` API，**Web（Vite + React）** 与 **React Native（Expo）** 共享一套业务与离线策略。
+
+**核心价值**：
+
+- ✨ **端到端 RAG**：切分、嵌入、检索、带引用回答——管线集中在 `@kb-rag/api-core`，CLI 与 HTTP 共用同一套逻辑。
+- 🎯 **在线 / 离线可切换**：`AI_RUNTIME_MODE` / `RUNTIME_MODE` 可在方舟与「占位嵌入 + 可选本地 OpenAI 兼容对话」之间切换；Web/RN 支持知识库 bundle 同步后的端内检索与占位答复。
+- 🚀 **单体可演示、Monorepo 可演进**：`kb_store` 本地落盘、同源托管 API + 前端产物、Docker Compose 一键拉起；复杂能力拆到 `packages/*` 便于复用与测试。
+
+**适用场景**：技术文档 / 手册问答、内网知识库 PoC、离线演示与 Harness 验收、多端（Web + 移动）统一体验原型。
+
+---
+
+## 🏗️ 架构设计
+
+### 设计理念
+
+- **关注点分离**：`api-core` 只管 RAG 领域；`kb-rag-server` 负责 HTTP、限流、日志、静态资源与 CORS；`app-shared` / `client-offline-core` 承载多端一致的产品行为。
+- **配置驱动**：方舟端点、检索阈值、会话持久化、上传上限等均由环境变量控制（见根目录 `.env.example`），避免把环境差异写死在代码里。
+- **渐进式交付**：默认本地 `kb_store` 即可跑通；需要生产化时再叠网关、集中日志与 WAF（仓库内 `docs/PRODUCTION_SECURITY_V4.md` 提供清单）。
+
+### 整体架构
+
+```mermaid
+graph TB
+  subgraph clients["客户端"]
+    WEB["kb-rag-web<br/>Vite + React"]
+    MOB["kb-rag-mobile<br/>Expo + RN"]
+  end
+
+  subgraph server["kb-rag-server"]
+    API["REST /v1"]
+    STA["托管 apps/web/dist"]
+  end
+
+  subgraph core["packages"]
+    AC["@kb-rag/api-core<br/>LangChain ingest / ask / chat"]
+    AS["@kb-rag/app-shared<br/>会话与离线偏好"]
+    OF["@kb-rag/client-offline-core<br/>Web IndexedDB 快照"]
+    DS["@kb-rag/design-system"]
+  end
+
+  KB[("kb_store<br/>vectors + manifest")]
+
+  WEB --> API
+  MOB --> API
+  WEB --> AS
+  WEB --> OF
+  MOB --> AS
+  MOB --> DS
+  API --> AC
+  AC --> KB
+  API -.-> STA
+```
+
+**层次说明**：
+
+| 层次 | 职责 | 关键位置 |
+|------|------|----------|
+| **入口与网关内逻辑** | 路由、`/healthz` / `/readyz`、上传、会话 API、同源静态站 | `apps/server/src/` |
+| **RAG 内核** | PDF 解析、切块、嵌入、检索、CLI | `packages/api-core/src/` |
+| **共享 UI / 离线** | 双模式聊天、连接自检、bundle 同步入口 | `packages/app-shared/`、`packages/client-offline-core/` |
+| **数据面** | 向量与清单落盘、可选 `sessions/`、`kb_uploads/` | 仓库根 `kb_store/`、`sessions/`（见 `.gitignore`） |
+
+### 核心数据流（在线 RAG）
+
+```
+PDF → 切分与嵌入 → 写入 kb_store
+用户提问 → 向量检索 Top-K → 拼接上下文 → 对话模型 → 带引用/摘要的回答
+```
+
+多轮与上下文裁剪由 `ARK_CHAT_MAX_HISTORY_MESSAGES`、`ARK_RAG_CONTEXT_MAX_CHARS` 等约束（详见 `docs/KB_OPERATIONS.md`「多轮与裁剪」）。
+
+---
+
+## 🚀 快速开始
+
+### 前置要求
+
+| 依赖 | 说明 |
+|------|------|
+| **Node.js** | 建议 **≥ 20**（与 Docker 镜像阶段一致） |
+| **pnpm** | 工作区安装与脚本执行 |
+| **方舟（在线模式）** | 配置 `ARK_API_KEY` 等；离线模式可跳过 |
+
+### 安装与运行（CLI 最小路径）
 
 ```bash
+git clone <你的仓库 URL>
+cd harness-langchain-knowledge-base
+
+pnpm install
+# 若出现 ERR_PNPM_IGNORED_BUILDS（esbuild 等）：pnpm approve-builds --all 后再 pnpm install
+
+cp .env.example .env
+# 按在线/离线需求编辑 .env（在线需填 ARK_*）
+
+pnpm run build
+# 可选验收：pnpm test（不要求配置 ARK_API_KEY）
+
+# 将 PDF 放入 pdfs/ 后入库
+pnpm ingest -- pdfs/某文件.pdf
+
+# 单轮问答（需已有 kb_store/vectors.json）
 pnpm ask -- "这份资料的核心结论是什么？"
 ```
 
-### 示例问题
-
-- 「请用三句话概括文档在讲什么。」  
-- 「文中提到的关键步骤有哪些？」  
-- 「针对某一段，作者的主要论点是什么？」  
-
-### 常见问题
-
-- **HTTP 429 / Too Many Requests**：方舟侧限流或配额紧张。请稍后再试、降低调用频率，或在控制台检查用量与套餐。  
-- **PDF 入库后 chunk 很少或问答答非所问**：常见原因是 PDF **只有扫描图、没有可选中文字**（无文本层）。请换用带文字层的 PDF，或对扫描件做 OCR 后再入库。  
-- **检索不到片段**：可调低环境变量 **`ARK_RAG_SCORE_MIN`**（默认 `0.35`），或改写问题；也可调大 **`ARK_RAG_TOP_K`**（默认 `4`）并配合更具体问题。  
-- **离线模式嵌入**：**`AI_RUNTIME_MODE=offline`**（或 **`RUNTIME_MODE=offline`**）时默认使用**确定性哈希伪向量**（非真实语义模型），检索质量显著弱于在线方舟嵌入；详见 **`.env.example`** 中 **`OFFLINE_STUB_EMBED_DIM`** 说明。可选 **`LOCAL_CHAT_BASE_URL`** 指向本机 OpenAI 兼容对话接口（如 Ollama）；不可用时报 **`OFFLINE_CHAT_UNAVAILABLE`**（503）。
-
-换书、清空向量、环境变量与安全边界等运维约定见 **`docs/KB_OPERATIONS.md`**。多轮对话的**历史条数与参考资料长度裁剪**（`ARK_CHAT_MAX_HISTORY_MESSAGES`、`ARK_RAG_CONTEXT_MAX_CHARS`）见该文档 **「6. 多轮与裁剪」**。
-
-### 离线模式：服务端 vs 端内完全离线
-
-| 模式 | 含义 | 你需要什么 |
-|------|------|------------|
-| **服务端 `AI_RUNTIME_MODE=offline`（或 `RUNTIME_MODE=offline`）** | Node 上的 **Express 仍提供 `/v1`**；RAG 仍走后端流水线，嵌入/对话可走桩实现（非方舟语义）。 | 根目录 **`.env`** + **`pnpm serve`**；详见 **`.env.example`** 中 **`OFFLINE_STUB_EMBED_DIM`**、**`LOCAL_CHAT_*`** 等。 |
-| **端内完全离线（Web / RN）** | 浏览器或 App **不依赖当前网络访问方舟**；用本机拉取的 **manifest + vectors 快照** 做检索 + **占位回答**；会话可用 **仅客户端生成的 session id**。 | ① 在线时在 **「连接自检」** 面板点击 **「同步知识库到本机」**（`GET /v1/knowledge-base/bundle`，需 **Admin Token** 与已入库的 `kb_store`）② 打开 **「主动使用离线模式」**（偏好持久化：**Web `localStorage` / RN `AsyncStorage`**，键前缀 **`kb-rag-offline:v1`**，实现见 **`packages/app-shared`**）③ 点 **新本地会话** 后再在对话区发送。 |
-
-**端内存储位置**
-
-- **Web**：**IndexedDB**（`@kb-rag/client-offline-core` 的 **`createWebIndexedDbKbBundleStore()`**），在 **`apps/web/src/App.tsx`** 注入 **`KbWorkspaceApp`**。细节见 **`apps/web/README.md`**「端内离线」。
-- **RN（Android / iOS）**：**应用文档目录**下的向量 JSON 分片 + **AsyncStorage** 指针，见 **`apps/mobile/src/storage/rnKbBundleStore.ts`**，在 **`apps/mobile/App.tsx`** 注入。
-
-**Web 离线 smoke（新贡献者最短路径）**
-
-1. 终端 A：根目录 **`pnpm serve`**（需已有 **`kb_store`**、根 **`.env`** 中 **`HTTP_ADMIN_TOKEN`** 等）。  
-2. 终端 B：**`pnpm dev:web`**，浏览器打开 **`http://127.0.0.1:5173`**。  
-3. 配置 **`apps/web/.env.local`** 中 **`VITE_HTTP_ADMIN_TOKEN`**，与服务端 **`HTTP_ADMIN_TOKEN`** 一致。  
-4. 打开 **「工具」** → **「连接自检」**：先 **同步知识库到本机** → 勾选 **主动使用离线模式** → **新本地会话** → 打开 DevTools **Offline**，在对话区发送一条问题；应得到本机 **stub 回答** 与 **引用摘要**。若从未同步，应出现 **中文横幅** 提示先同步（不应白屏或崩溃）。  
-
-更全的手工矩阵见 **`project-atlas/offline-phase5-6-7-acceptance.md`**。可选 **`pnpm test:e2e`**（可能需 **`ARK_API_KEY`** 或设 **`E2E_SKIP=1`**，见下文「前端验证与 E2E」）。
-
-### 可视化网页（Vite + React，极简）
-
-- **同源（生产）**：静态 SPA 与 REST API（`/v1`、`/healthz`、`/readyz` 等）由**同一 Express 进程、同一 Origin** 提供；中间件顺序与 v3 一致——**先注册 `/v1` 等 API，再 `express.static(apps/web/dist)`，最后 SPA fallback 到 `index.html`**（`/v1` 不会被 fallback 吞掉）。实现见 **`apps/server/src/app.ts`**，`main.ts` 中前端产物路径为 **`apps/web/dist`**（workspace 下对应原 v3 的 `web/dist`）。  
-- **同一域名（浏览器）**：**手机浏览器与桌面浏览器共用同一 URL/域名**，靠响应式布局适配；不做 UA 跳转到独立 m 站。开发阶段例外：Vite 开发服务器在 **5173**，通过代理访问 API（**8788**），属于跨端口本地调试。  
-- **双进程开发**：终端 A 根目录执行 **`pnpm serve`**（默认 `8788`，需已有 `kb_store` 与根目录 `.env`）；终端 B 执行 **`pnpm dev:web`**，浏览器打开 **http://127.0.0.1:5173**（Vite 将 `/v1`、`/healthz`、`/readyz` 代理到 `127.0.0.1:8788`）。  
-- **替换知识库**：页面使用 `POST /v1/knowledge-base/replace`，需在 **`apps/web/.env.local`** 配置 **`VITE_HTTP_ADMIN_TOKEN`**，与根目录服务端 **`HTTP_ADMIN_TOKEN`** 一致；**勿将 `apps/web/.env.local` 提交到 git**（已在 `.gitignore`）。生产环境请用短期票据、同源 Cookie 或网关鉴权，避免把长期 token 打进前端静态包。  
-- **单进程生产**：先 **`pnpm run build && pnpm run build:web`**，再只跑 **`pnpm serve`**：Express 在挂载 `/v1` 后托管 **`apps/web/dist`**，并对非 `/v1` 的 `GET` 回退到 **`index.html`**（静态资源与 API 不冲突）。
-
-HTTP JSON 契约见 **`docs/KB_API.md`**。
-
-### PWA（v4 预留钩子）
-
-- **目录**：**`apps/web/public/`** —— `manifest.webmanifest`、`sw.js`、`pwa-icons/`（占位 SVG 图标，可换 PNG maskable）。
-- **构建产物**：`pnpm build:web` 后，`dist/` 根路径含 manifest 链接（见 **`apps/web/index.html`**）及同名静态文件。
-- **Service Worker**：仅在 **生产构建**（`import.meta.env.PROD`）下由 **`apps/web/src/registerSw.ts`** 注册；**开发模式 `pnpm dev:web` 不注册**，以免干扰 Vite HMR。SW **不缓存 `/v1/*`**，亦不把用户选择的 PDF 写入 Cache API（上传为 POST）。
-- **线上流程**：仍依赖后端提供 `/v1`；页面内已标注「问答仍需后端或 RN」类提示。
-
-### React Native（v4，Expo）
-
-- **目录**：**`apps/mobile/`**（Expo + TypeScript）；依赖 **`@kb-rag/app-shared`**、**`@kb-rag/design-system`**，REST 与 Web 一致；构建与环境变量见 **`apps/mobile/README.md`**。
-- **启动**：仓库根 **`pnpm dev:mobile`**（会先构建 workspace 包）；环境变量见 **`apps/mobile/.env.example`**（`EXPO_PUBLIC_API_BASE_URL`、上传用的 **`EXPO_PUBLIC_HTTP_ADMIN_TOKEN`**）；**勿**将方舟密钥写入 **`EXPO_PUBLIC_*`**。
-- **Android 模拟器**访问本机 API：通常使用 **`http://10.0.2.2:8788`**（详见 `apps/mobile/.env.example`）。
-
-### 临时修改端口（避免「address already in use」）
-
-同一台机器上若 **`8788` 已被占用**（例如已运行 **`pnpm serve`**），可选用下列方式之一：
-
-**Docker Compose（与本机 dev 默认同为 8788 时，可改宿主映射错开）**
-
-- 默认映射为 **`8788:8788`**（宿主机 **8788** → 容器内 **`PORT` 默认 8788**），浏览器打开 **http://127.0.0.1:8788**。  
-- **临时一行命令**（不改文件）：  
-  `KB_RAG_HOST_PORT=8790 docker compose up --build` → 访问 **http://127.0.0.1:8790**。  
-- **在 `.env` 里统一改**（compose 会自动读仓库根 `.env` 做插值）：同时设定 **`KB_RAG_HOST_PORT`**（宿主机对外端口）与 **`PORT`**（容器内监听端口）。二者通常设为**同一个数字**即可，例如：  
-  `KB_RAG_HOST_PORT=8790` 与 `PORT=8790` → 映射为 **8790:8790**，访问 **http://127.0.0.1:8790**。  
-  若只想改宿主机对外端口、容器内仍用默认 **`PORT`（8788）**：只设 **`KB_RAG_HOST_PORT=8790`**，勿改 **`PORT`**。
-
-**本机 `pnpm serve` / Vite 双进程**
-
-- API：**`PORT=8790 pnpm serve`**  
-- 前端代理：终端 B 执行 **`VITE_API_PORT=8790 pnpm dev:web`**（与 **`apps/web/vite.config.ts`** 中默认代理一致）。
-
-**本机单进程（`pnpm serve` 已托管 `apps/web/dist`）**
-
-- **`PORT=8790 pnpm serve`**，浏览器 **http://127.0.0.1:8790**。
-
-### Docker（阶段 Q，开发 / 演示）
-
-云上镜像、Compose、卷挂载与健康检查的完整约定见 **`docs/PRODUCTION_SECURITY_V4.md`**「阶段 Q」。
-
-1. 复制 **`cp .env.example .env`** 并填写方舟相关变量；**不要将含密钥的 `.env` 打进镜像**（已在 `.dockerignore` 忽略）。  
-2. **`./kb_store` 中须有已 ingest 的向量**（`vectors.json` / `manifest.json`），否则进程启动时会报错；可将本机已有 `kb_store` 挂入容器，或先在宿主机执行 `pnpm ingest` 再启动 compose。  
-3. 启动：**`docker compose up --build`**，浏览器访问 **http://127.0.0.1:8788**（默认映射 **`8788:8788`**，静态页 + 同源 **`/v1`**）。可通过 **`KB_RAG_HOST_PORT`** / **`PORT`** 调整，见上文「临时修改端口」。Compose 通过 **`env_file: .env`** 向容器注入环境变量。  
-4. **数据卷**：`./kb_store` → `/app/kb_store`、`./sessions` → `/app/sessions`、`./kb_uploads` → `/app/kb_uploads`（上传替换 PDF 时写入）。  
-5. **运行身份**：镜像最终阶段为 **`node:20-alpine`**，主进程以 **`USER node`**（非 root）执行 **`node apps/server/dist/main.js`**。  
-6. **健康检查**：compose 内对 **`GET /healthz`** 配置了 **`healthcheck`**（镜像内使用 `wget`）。
-
-**容器重启后会话是否还在？**
-
-- **未设置 `ARK_SESSION_PERSIST=1`**：会话只在**当前进程内存**中；**重启即丢失**，与是否挂载 `sessions` 目录无关。  
-- **`ARK_SESSION_PERSIST=1`**：新消息会写入 **`sessions/{sessionId}.json`**。此时是否跨重启保留，取决于是否挂载 **`./sessions:/app/sessions`**：  
-  - **已挂载**：文件写在宿主机目录上，**重启容器后会话文件仍在**（同一 `sessionId` 可继续用）。  
-  - **未挂载**：数据写在容器可写层，**重建或删除容器后通常丢失**；不建议依赖未挂载的落盘路径。
-
-### 生产 checklist（阶段 P）与 v4 增补（阶段 X）
-
-**v3 P（限流、日志、超时、就绪）与 Q/R（Docker、火山 CLB、上传大小、单副本）**的继承说明、核对表与 **v4 多端安全增补**见 **`docs/PRODUCTION_SECURITY_V4.md`**。
-
-上线前逐项核对；已实现项已勾选，其余留空待网关 / 运维补齐。
-
-- [x] **速率限制**：`express-rate-limit` 作用于 `POST .../messages` 与 `POST .../messages:stream`；`HTTP_RATE_LIMIT_ENABLED=1` 时生效，键为客户端 IP，可选 `HTTP_RATE_LIMIT_BY_SESSION=1` 叠加 `sessionId`；超限返回 **429**、`error.code: RATE_LIMITED`。
-- [x] **JSON body 上限**：`express.json` 使用 `HTTP_JSON_BODY_MAX_BYTES`（默认 256 KiB），与 **`KB_UPLOAD_MAX_BYTES`**（multipart）独立；超限 **413**、`PAYLOAD_TOO_LARGE`。
-- [x] **结构化日志**：`pino` + `pino-http`；响应头 **`X-Request-Id`**（或请求传入的 `x-request-id`），错误 JSON 含 **`requestId`** 便于与日志关联。请勿在业务中 `console.log` 完整 PDF 或完整 prompt；密钥类头在日志配置中 redact。
-- [x] **方舟超时**：`ARK_REQUEST_TIMEOUT_MS`（默认 120s）作用于对话与嵌入；超时映射 **504**、`ARK_TIMEOUT`（流式 SSE 的 `error` 帧同码）。
-- [x] **Readiness**：**`GET /readyz`** 尝试读取 `kb_store/manifest.json`（不调用方舟）；**`GET /healthz`** 仍为轻量进程探活。二者区别见 **`docs/KB_API.md`**。
-- [ ] **集中日志 / 脱敏审计**：将 pino 输出接入 ELK / Loki 等；审计字段与保留周期按合规要求由运维配置。
-- [ ] **WAF / Bot 防护**、**mTLS / 私有链路**：由入口网关或云厂商完成，本仓库仅文档约定。
-
-**阶段 X（v4，交付前建议打勾）**
-
-- [ ] **React / RN 版本锁定**：**`apps/web`** 与 **`apps/mobile`** 对齐 **Expo** 锁定的 **`react` / `react-native`**；**`react-native-web`** 仅用于 Web；升级 SDK 后执行 **`pnpm -r run typecheck`** 与 Web + Native 冒烟（避免双 React 实例）。  
-- [ ] **流水线密钥**：**Web / EAS 构建产物中不出现 `ARK_API_KEY`**；方舟与 **`HTTP_ADMIN_TOKEN`** 仅注入**服务端**运行时（Secret / 部署环境变量）。  
-- [ ] **离线暴露**：**`AI_RUNTIME_MODE=offline`** 且使用 **`LOCAL_CHAT_*`** 时，**勿将无 TLS、无强认证与审计的本地推理端口暴露公网**（仅限内网、VPN 或受控网关）。
-
-### 前端验证与 E2E（O2）
-
-- **页面内**：顶部横幅展示最近一次成功/失败；对话区、上传区有 **loading / 禁用 / 内联成功条**；折叠面板 **「连接自检」** 可顺序探测 `GET /healthz`、`GET /readyz`、`POST /v1/sessions`、`GET /v1/sessions/:id`；可选勾选 **「包含一条模型调用」** 会 `POST .../messages`（消耗方舟配额）。错误文案会区分 **401 / 413 / 429 / 504 / 5xx** 等，并隐藏可能的 **Bearer** 片段。  
-- **Playwright**：根目录执行 **`pnpm test:e2e:install`**（首次安装 Chromium），再 **`pnpm test:e2e`**。默认会拉起 **`pnpm serve`**（端口 **`E2E_API_PORT`，默认 `18790`，避免与开发常用 8788 冲突）与 **`pnpm dev:web`**（5173，经 `VITE_API_PORT` 代理到同一 API 端口）；若本机已在跑对应服务，会复用（`reuseExistingServer`）。  
-- **跳过条件**：未配置 **`ARK_API_KEY`** 时套件内用例会 **skip**（不失败）；或设置 **`E2E_SKIP=1`** 跳过（**不启动** webServer，适合 CI 无浏览器/无密钥）。CI 无密钥时可设 `E2E_SKIP=1`。**MSW mock** 未接入；若需无密钥跑通 UI，可自行加 mock 或扩展用例。
-
-### 多轮对话与会话落盘（可选）
-
-- **默认**：`pnpm chat` 仅在**内存**中保留当前进程内的消息，退出后不留痕。  
-- **落盘**：在 `.env` 中设置 **`ARK_SESSION_PERSIST=1`** 后，每次追加用户/助手消息会写入仓库根目录 **`sessions/{sessionId}.json`**（UTF-8 JSON，含 `id`、`createdAt`、`updatedAt`、`messages`）。**请勿将含敏感提问或业务机密的快照提交到 git**；`sessions/*.json` 已在 `.gitignore` 中忽略，仅保留 `sessions/.gitkeep`。  
-- **恢复**：`pnpm chat -- --resume <sessionId>`，其中 `sessionId` 须为合法 **UUID**（与文件名一致）；实现会校验格式并防止路径穿越。未开启 `ARK_SESSION_PERSIST` 时仍可**只读**从已有 JSON 恢复上下文，但后续对话不会自动写回磁盘，除非再开启落盘。
-
-## 验收
-
-对应实现指南 **C2**：`package.json` 中已提供脚本 **`ingest:smoke`**。行为如下：
-
-1. **最小 PDF**：若仓库中尚无 `pdfs/_smoke.pdf`，则调用 `scripts/gen-smoke-pdf.py` 生成（**优先几十字中文**；若本机找不到常见 CJK 字体则退化为英文长句，仍可用于管道验收）。需本机 **Python 3** 与 **reportlab**（`pip install reportlab`）。  
-2. **跑入库**：等价于对 `pdfs/_smoke.pdf` 执行 `pnpm ingest -- pdfs/_smoke.pdf`（需已配置 `.env` 且方舟 API 可用）。  
-3. **Harness 断言**：命令**末尾**打印 `kb_store` 下 `vectors.json`、`manifest.json` 的**文件大小**，并断言 **`chunk > 0`**（否则进程以非零码退出）。
+### 双进程开发（API + Web）
 
 ```bash
-pnpm ingest:smoke
+# 终端 A：API（默认 8788，需 kb_store 与根 .env）
+pnpm serve
+
+# 终端 B：前端开发服务器（默认 5173，代理到 API）
+pnpm dev:web
 ```
 
-默认 **`ARK_EMBED_INPUT_MODE=multimodal`（可省略）**：面向方舟「多模态向量化」端点，请求 **`POST {ARK_BASE_URL}/embeddings/multimodal`**，`input` 为内容片段数组；纯文本块使用 `[{ "type": "text", "text": "..." }]`。`ARK_EMBED_DIMENSIONS` 须与控制台（1024 / 2048）一致。若接入点为**纯文本** OpenAI 兼容 `.../embeddings`，设置 **`ARK_EMBED_INPUT_MODE=text`**。
+浏览器打开 `http://127.0.0.1:5173`。管理类操作（替换知识库、同步 bundle）需在 `apps/web/.env.local` 配置 `VITE_HTTP_ADMIN_TOKEN`，并与服务端 `HTTP_ADMIN_TOKEN` 一致。
+
+### 单进程生产形态
+
+```bash
+pnpm run build && pnpm run build:web
+pnpm serve
+```
+
+Express 先挂载 `/v1`，再托管 `apps/web/dist`，非 API 的 `GET` 回退到 `index.html`。
+
+### 冒烟与 E2E
+
+```bash
+pnpm ingest:smoke    # 需 Python 3 + reportlab，见脚本说明
+pnpm test:e2e:install && pnpm test:e2e   # 无 ARK_API_KEY 时部分用例 skip；CI 可 E2E_SKIP=1
+```
+
+---
+
+## 📁 项目结构（节选）
+
+```
+harness-langchain-knowledge-base/
+├── apps/
+│   ├── server/          # kb-rag-server：Express、静态资源、Docker 入口
+│   ├── web/             # kb-rag-web：Vite + React（详见 apps/web/README.md）
+│   └── mobile/          # Expo RN（详见 apps/mobile/README.md）
+├── packages/
+│   ├── api-core/        # LangChain RAG 与 CLI（ingest / ask / chat）
+│   ├── app-shared/      # 多端共享业务与离线偏好
+│   ├── client-offline-core/  # Web 端离线存储与检索
+│   ├── design-system/   # UI 组件与设计令牌
+│   └── shared/          # 通用类型与工具
+├── docs/                # API、运维与安全清单
+├── pdfs/                # 待入库 PDF 放置区
+├── kb_store/            # 向量与 manifest（运行时生成，勿提交密钥）
+├── scripts/             # 冒烟、fixture、对比脚本等
+└── README.md
+```
+
+---
+
+## ✨ 主要功能
+
+### 服务端 RAG 与运维
+
+- PDF **入库**、**向量检索**、**单轮 ask** 与 **多轮 chat**（CLI + HTTP）。
+- **会话 API**、可选 **会话落盘**（`ARK_SESSION_PERSIST=1` → `sessions/*.json`）。
+- **就绪探针**（`/readyz` 读 manifest）、**限流**、**结构化日志**、**上传替换知识库**（需 Admin Token）。
+
+### 多端体验
+
+- **Web**：连接自检、流式/非流式对话、知识库替换、PWA 钩子（生产构建注册 SW）。
+- **端内离线**：在线同步 `GET /v1/knowledge-base/bundle` 后，IndexedDB（Web）或 RN 本地存储中检索 + 占位回答；偏好持久化键前缀 `kb-rag-offline:v1`。
+
+### 工程化
+
+- **pnpm workspace** 分包构建与类型检查；根脚本聚合 **test / build / e2e**。
+- **Docker Compose**：挂载 `kb_store`、`sessions`、`kb_uploads`；详见 `docs/PRODUCTION_SECURITY_V4.md`「阶段 Q」。
+
+HTTP 契约见 **`docs/KB_API.md`**；换书、清库、端口与离线对照表见 **`docs/KB_OPERATIONS.md`**。
+
+---
+
+## ⚙️ 配置说明
+
+完整说明与注释以 **`.env.example`** 为准。下表为最常见的几项：
+
+| 变量 | 说明 |
+|------|------|
+| `ARK_API_KEY` / `ARK_CHAT_MODEL` / `ARK_EMBED_MODEL` | 火山方舟 OpenAI 兼容路径（在线模式） |
+| `AI_RUNTIME_MODE` / `RUNTIME_MODE` | `online`（默认）或 `offline`（占位嵌入等） |
+| `PORT` | HTTP 监听，默认 **8788** |
+| `HTTP_ADMIN_TOKEN` | 管理接口 Bearer，与 Web `VITE_HTTP_ADMIN_TOKEN` 对齐 |
+| `LOCAL_CHAT_BASE_URL` | 离线时可选：Ollama 等 OpenAI 兼容对话基址 |
+| `HTTP_CORS_ORIGINS` | 生产/跨域白名单；开发默认允许本机 Vite |
+
+Web 侧示例见 **`apps/web/.env.example`**；移动端见 **`apps/mobile/.env.example`**（勿把方舟密钥写入 `EXPO_PUBLIC_*`）。
+
+---
+
+## 👨‍💻 开发指南
+
+- **类型检查**：`pnpm typecheck`（递归各包）。
+- **测试**：`pnpm test`（`api-core`、`client-offline-core`、`app-shared` 等根脚本组合）。
+- **提交信息**：建议 Conventional Commits（`feat:`、`fix:`、`docs:`、`refactor:` 等）。
+
+更多前端细节、离线最短路径与端口冲突处理见 **`apps/web/README.md`**；原生构建见 **`apps/mobile/README.md`**。
+
+---
+
+## 🤝 贡献指南
+
+1. Fork 本仓库并创建分支（如 `feature/your-topic`）。
+2. 本地 `pnpm install` → `pnpm run build` → `pnpm test`（按改动范围选择）。
+3. 提交 PR 时简述动机、风险与验证方式；避免将 `.env`、`sessions/*.json`、含密钥的 token 一并提交。
+
+---
+
+## 📄 许可证
+
+根 `package.json` 标记为 **private**；仓库根目录**未包含** `LICENSE` 文件。若你计划对外开源，请自行补充许可证文本并在本段更新链接。
+
+---
+
+## 🙏 致谢
+
+设计与实现受益于以下生态与产品：
+
+- [LangChain.js](https://js.langchain.com/) 与 OpenAI 兼容抽象  
+- [火山引擎方舟](https://www.volcengine.com/)（嵌入与对话接入）  
+- [Express](https://expressjs.com/)、[Vite](https://vitejs.dev/)、[Expo](https://expo.dev/)
+
+---
+
+<p align="center">
+若这份 README 帮你少踩一个坑，欢迎顺手点个 Star ⭐
+</p>
