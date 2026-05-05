@@ -14,6 +14,12 @@
 
 **禁止**：将 **`ARK_API_KEY`**、长期 **`HTTP_ADMIN_TOKEN`** 等敏感内容写入 `EXPO_PUBLIC_*`（会进入 JS bundle）。
 
+## CI / EAS 与生产发布
+
+- **EAS Build / 任意移动端流水线**：**禁止**在 **`eas.json` env**、Expo Dashboard **明文 Secret** 或构建脚本中注入 **`ARK_*`**（会泄漏进无关日志或误打进 bundle）；方舟密钥**仅**服务端部署环境持有。  
+- 允许的 **`EXPO_PUBLIC_*`**：API 根 URL、（若业务接受）短期上传用 token；生产优先改为 **网关鉴权 / 同源 Cookie**，而非长期打进客户端。  
+- 全文 checklist：**`docs/PRODUCTION_SECURITY_V4.md`**「4.2」。
+
 ## 依赖与路径
 
 - **`babel-plugin-module-resolver`**：将 `@kb-rag/*` 解析到 **`packages/*/src`**（与 Web 侧直连源码的开发体验对齐）。

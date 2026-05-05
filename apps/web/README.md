@@ -1,6 +1,6 @@
 # kb-rag-web（Vite + react-native-web）
 
-与 **`apps/mobile`** 共用 **`react-native` 0.76.7（与 Expo 锁定一致）**，避免双实例；`react-native-web` 仅用于 Web 构建。
+与 **`apps/mobile`** 共用 **`react-native` 0.76.7（与 Expo 锁定一致）**，避免双实例；`react-native-web` 仅用于 Web 构建。升级 Expo 时务必同步抬升 **`apps/web`** 中 **`react-native`** / **`react`**，并跑全仓库 **`pnpm -r run typecheck`**（详见 **`docs/PRODUCTION_SECURITY_V4.md`**「4.1」）。
 
 ## `react-native` → `react-native-web`（Vite）
 

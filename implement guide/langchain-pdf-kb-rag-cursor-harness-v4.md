@@ -309,6 +309,14 @@ v4 增补 checklist：
   - 离线模式打开时：文档提示「勿将不具备加密与审计能力的本地服务暴露公网」
 ```
 
+**实现说明（仓库现状）**：
+
+- **`docs/PRODUCTION_SECURITY_V4.md`**：汇总 **v3 P**（限流、日志、JSON/上传上限、超时、readyz）、**Q**（Dockerfile / compose / 非 root / 卷）、**R**（火山镜像与 Secret、CLB·TLS·**`KB_UPLOAD_MAX_BYTES`** 网关对齐、**单副本 MVP / 多副本 Redis·共享存储**）；以及 **v4 X**：**React·RN·Expo 锁定**、**CI/EAS 不传方舟 key**、**离线 LOCAL_CHAT 勿暴露公网**。  
+- **`README.md`**：「生产 checklist」标题扩展为 **P + X**，Docker 小节链至该文档；新增 **阶段 X** 三条可选勾选。  
+- **`.env.example`**：离线 **`LOCAL_CHAT_*`** 段落后增加 **公网暴露安全提示**（指向文档 §4.3）。  
+- **`apps/mobile/README.md`**：**CI / EAS** 小节重申 **`ARK_*`** 不进移动端构建。  
+- **`apps/web/README.md`**：版本锁定与升级回归指向 **`PRODUCTION_SECURITY_V4`**。
+
 ---
 
 ## 8. v4 总验收清单（交付前打勾）

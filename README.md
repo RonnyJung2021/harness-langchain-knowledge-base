@@ -77,6 +77,8 @@ HTTP JSON 契约见 **`docs/KB_API.md`**。
 
 ### Docker（阶段 Q，开发 / 演示）
 
+云上镜像、Compose、卷挂载与健康检查的完整约定见 **`docs/PRODUCTION_SECURITY_V4.md`**「阶段 Q」。
+
 1. 复制 **`cp .env.example .env`** 并填写方舟相关变量；**不要将含密钥的 `.env` 打进镜像**（已在 `.dockerignore` 忽略）。  
 2. **`./kb_store` 中须有已 ingest 的向量**（`vectors.json` / `manifest.json`），否则进程启动时会报错；可将本机已有 `kb_store` 挂入容器，或先在宿主机执行 `pnpm ingest` 再启动 compose。  
 3. 启动：**`docker compose up --build`**，浏览器访问 **http://127.0.0.1:8788**（默认映射 **`8788:8788`**，静态页 + 同源 **`/v1`**）。可通过 **`KB_RAG_HOST_PORT`** / **`PORT`** 调整，见上文「临时修改端口」。Compose 通过 **`env_file: .env`** 向容器注入环境变量。  
@@ -91,7 +93,9 @@ HTTP JSON 契约见 **`docs/KB_API.md`**。
   - **已挂载**：文件写在宿主机目录上，**重启容器后会话文件仍在**（同一 `sessionId` 可继续用）。  
   - **未挂载**：数据写在容器可写层，**重建或删除容器后通常丢失**；不建议依赖未挂载的落盘路径。
 
-### 生产 checklist（阶段 P）
+### 生产 checklist（阶段 P）与 v4 增补（阶段 X）
+
+**v3 P（限流、日志、超时、就绪）与 Q/R（Docker、火山 CLB、上传大小、单副本）**的继承说明、核对表与 **v4 多端安全增补**见 **`docs/PRODUCTION_SECURITY_V4.md`**。
 
 上线前逐项核对；已实现项已勾选，其余留空待网关 / 运维补齐。
 
@@ -102,6 +106,12 @@ HTTP JSON 契约见 **`docs/KB_API.md`**。
 - [x] **Readiness**：**`GET /readyz`** 尝试读取 `kb_store/manifest.json`（不调用方舟）；**`GET /healthz`** 仍为轻量进程探活。二者区别见 **`docs/KB_API.md`**。
 - [ ] **集中日志 / 脱敏审计**：将 pino 输出接入 ELK / Loki 等；审计字段与保留周期按合规要求由运维配置。
 - [ ] **WAF / Bot 防护**、**mTLS / 私有链路**：由入口网关或云厂商完成，本仓库仅文档约定。
+
+**阶段 X（v4，交付前建议打勾）**
+
+- [ ] **React / RN 版本锁定**：**`apps/web`** 与 **`apps/mobile`** 对齐 **Expo** 锁定的 **`react` / `react-native`**；**`react-native-web`** 仅用于 Web；升级 SDK 后执行 **`pnpm -r run typecheck`** 与 Web + Native 冒烟（避免双 React 实例）。  
+- [ ] **流水线密钥**：**Web / EAS 构建产物中不出现 `ARK_API_KEY`**；方舟与 **`HTTP_ADMIN_TOKEN`** 仅注入**服务端**运行时（Secret / 部署环境变量）。  
+- [ ] **离线暴露**：**`AI_RUNTIME_MODE=offline`** 且使用 **`LOCAL_CHAT_*`** 时，**勿将无 TLS、无强认证与审计的本地推理端口暴露公网**（仅限内网、VPN 或受控网关）。
 
 ### 前端验证与 E2E（O2）
 
