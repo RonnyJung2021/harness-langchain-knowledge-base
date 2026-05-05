@@ -3,29 +3,12 @@ import path from "node:path";
 import { Document } from "@langchain/core/documents";
 import type { EmbeddingsInterface } from "@langchain/core/embeddings";
 import { MemoryVectorStore } from "@langchain/classic/vectorstores/memory";
+import type { KbManifestV1, SerializedMemoryVector } from "@kb-rag/shared";
 
 export const VECTORS_FILENAME = "vectors.json";
 export const MANIFEST_FILENAME = "manifest.json";
 
-export type SerializedMemoryVector = {
-  content: string;
-  embedding: number[];
-  metadata: Record<string, unknown>;
-  id?: string;
-};
-
-export type KbManifestV1 = {
-  version: 1;
-  updatedAt: string;
-  embeddingModel: string;
-  totalChunks: number;
-  sources: string[];
-  lastIngest?: {
-    source: string;
-    chunkCount: number;
-    durationMs: number;
-  };
-};
+export type { KbManifestV1, SerializedMemoryVector };
 
 export function kbStoreDir(repoRoot: string): string {
   return path.join(repoRoot, "kb_store");

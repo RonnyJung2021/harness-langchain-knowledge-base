@@ -5,9 +5,11 @@ export { ingestPdfFromAbsolutePath } from "./ingestPdfFromAbsolutePath.js";
 export {
   kbStoreDir,
   manifestPath,
+  memoryStoreFromSerialized,
   readManifest,
   vectorsPath,
 } from "./store/localVectorStore.js";
+export { retrieveRelevantChunks } from "./ask/retrieve.js";
 export { loadKbRagContext } from "./chat/loadKbRagContext.js";
 export {
   runRagChatTurn,
