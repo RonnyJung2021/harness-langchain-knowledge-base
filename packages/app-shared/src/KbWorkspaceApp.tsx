@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { Box, Pressable, ScrollView, Text } from "@kb-rag/design-system";
 import { ThemeProvider, useTheme } from "@kb-rag/design-system";
 import type { PdfFileLike } from "./hooks/useKbReplace.js";
-import { useChatPanel } from "./hooks/useChatPanel.js";
+import { useChatPanelDualMode } from "./hooks/useChatPanelDualMode.js";
 import { useSessionApi } from "./hooks/useSessionApi.js";
 import { composerSafeBottomStyle } from "./layout/composerSafeBottom.js";
 import {
@@ -12,6 +12,8 @@ import {
 import { warnIfNativeMissingApiBase } from "./config/nativeApiGuard.js";
 import { KbBundleStoreProvider } from "./context/KbBundleStoreContext.js";
 import type { KbBundleStore } from "@kb-rag/client-offline-core";
+import { OfflinePreferenceProvider, useOfflinePreference } from "./offline/OfflinePreferenceProvider.js";
+import { useEffectiveOffline } from "./offline/useEffectiveOffline.js";
 import { ChatPanel } from "./panels/ChatPanel.js";
 import { DiagnosticsPanel } from "./panels/DiagnosticsPanel.js";
 import { KbReplacePanel } from "./panels/KbReplacePanel.js";
@@ -38,11 +40,30 @@ function ToolsStack(props: {
   session: ReturnType<typeof useSessionApi>;
   banner: { text: string; kind: "ok" | "err" } | null;
   onNotice: (msg: string, kind: "ok" | "err") => void;
+  effectiveOffline: boolean;
   /** 小屏「工具」Tab 占满剩余高度 */
   fillAvailable?: boolean;
 }) {
   const { tokens } = useTheme();
-  const { apiBaseUrl, adminToken, kbBundleStore, pickPdfFile, session, banner, onNotice, fillAvailable } = props;
+  const {
+    apiBaseUrl,
+    adminToken,
+    kbBundleStore,
+    pickPdfFile,
+    session,
+    banner,
+    onNotice,
+    effectiveOffline,
+    fillAvailable,
+  } = props;
+
+  const onNewSession = (): void => {
+    if (effectiveOffline) {
+      session.newLocalSession();
+      return;
+    }
+    void session.newSession();
+  };
 
   return (
     <ScrollView
@@ -64,8 +85,8 @@ function ToolsStack(props: {
         当前 session：{session.sessionId ?? "（未创建）"}
       </Text>
       <Pressable
-        onPress={() => void session.newSession()}
-        disabled={session.creating}
+        onPress={onNewSession}
+        disabled={session.creating && !effectiveOffline}
         style={{
           minHeight: tokens.touchTargetMin,
           marginBottom: tokens.space.md,
@@ -79,7 +100,9 @@ function ToolsStack(props: {
           borderRadius: tokens.radius.sm,
         }}
       >
-        <Text style={{ fontWeight: "700" }}>{session.creating ? "创建中…" : "新会话"}</Text>
+        <Text style={{ fontWeight: "700" }}>
+          {session.creating && !effectiveOffline ? "创建中…" : effectiveOffline ? "新本地会话" : "新会话"}
+        </Text>
       </Pressable>
 
       <Box
@@ -93,7 +116,9 @@ function ToolsStack(props: {
         }}
       >
         <Text style={{ fontSize: tokens.fontSize.xs, color: tokens.colors.textMuted, lineHeight: 18 }}>
-          PWA（占位）：可离线加载静态外壳；问答仍依赖后端 /v1 或后续 RN 客户端扩展离线推理。
+          {effectiveOffline
+            ? "当前为有效离线：对话走本机 RAG（须已同步知识库）；回复为占位 stub，与 README 离线说明一致。"
+            : "在线时对话走后端 /v1；勾选「主动使用离线模式」并创建本地会话后可不依赖网络发消息。"}
         </Text>
       </Box>
 
@@ -132,6 +157,8 @@ function KbWorkspaceInner(props: KbWorkspaceAppProps) {
   const { apiBaseUrl, adminToken, kbBundleStore, pickPdfFile } = props;
   const [banner, setBanner] = useState<{ text: string; kind: "ok" | "err" } | null>(null);
   const [compactTab, setCompactTab] = useState<CompactTab>("chat");
+  const { preferOffline } = useOfflinePreference();
+  const effectiveOffline = useEffectiveOffline(preferOffline);
 
   const onNotice = useCallback((msg: string, kind: "ok" | "err") => {
     setBanner({ text: msg, kind });
@@ -145,9 +172,11 @@ function KbWorkspaceInner(props: KbWorkspaceAppProps) {
   }, [apiBaseUrl, onNotice]);
 
   const session = useSessionApi(apiBaseUrl, onNotice);
-  const chat = useChatPanel({
+  const chat = useChatPanelDualMode({
     apiBaseUrl,
     sessionId: session.sessionId,
+    effectiveOffline,
+    bundleStore: kbBundleStore ?? null,
     onNotice,
   });
 
@@ -178,6 +207,15 @@ function KbWorkspaceInner(props: KbWorkspaceAppProps) {
     session,
     banner,
     onNotice,
+    effectiveOffline,
+  };
+
+  const onCompactNewSession = (): void => {
+    if (effectiveOffline) {
+      session.newLocalSession();
+      return;
+    }
+    void session.newSession();
   };
 
   return (
@@ -233,8 +271,8 @@ function KbWorkspaceInner(props: KbWorkspaceAppProps) {
                       {session.sessionId ?? "（未创建会话）"}
                     </Text>
                     <Pressable
-                      onPress={() => void session.newSession()}
-                      disabled={session.creating}
+                      onPress={onCompactNewSession}
+                      disabled={session.creating && !effectiveOffline}
                       style={{
                         minHeight: tokens.touchTargetMin,
                         paddingHorizontal: tokens.space.md,
@@ -246,7 +284,9 @@ function KbWorkspaceInner(props: KbWorkspaceAppProps) {
                         borderRadius: tokens.radius.sm,
                       }}
                     >
-                      <Text style={{ fontWeight: "700" }}>{session.creating ? "创建中…" : "新会话"}</Text>
+                      <Text style={{ fontWeight: "700" }}>
+                        {session.creating && !effectiveOffline ? "创建中…" : effectiveOffline ? "本地会话" : "新会话"}
+                      </Text>
                     </Pressable>
                   </Box>
                   <ChatPanel
@@ -329,7 +369,9 @@ export function KbWorkspaceApp(props: KbWorkspaceAppProps) {
   return (
     <ThemeProvider colorScheme="light">
       <KbBundleStoreProvider value={kbBundleStore ?? null}>
-        <KbWorkspaceInner {...innerProps} kbBundleStore={kbBundleStore} />
+        <OfflinePreferenceProvider>
+          <KbWorkspaceInner {...innerProps} kbBundleStore={kbBundleStore} />
+        </OfflinePreferenceProvider>
       </KbBundleStoreProvider>
     </ThemeProvider>
   );

@@ -9,6 +9,7 @@ export { DiagnosticsPanel, type DiagnosticsPanelProps } from "./panels/Diagnosti
 export { KbReplacePanel, type KbReplacePanelProps } from "./panels/KbReplacePanel.js";
 export { useSessionApi } from "./hooks/useSessionApi.js";
 export { useChatPanel } from "./hooks/useChatPanel.js";
+export { useChatPanelDualMode } from "./hooks/useChatPanelDualMode.js";
 export { postKbReplaceMultipart, type PdfFileLike } from "./hooks/useKbReplace.js";
 export {
   ApiRequestError,
@@ -29,3 +30,15 @@ export {
   type KbBundleSyncErrorCode,
 } from "./offline/syncKbBundle.js";
 export { useLikelyOnline } from "./offline/useLikelyOnline.js";
+export {
+  OfflinePreferenceProvider,
+  useOfflinePreference,
+  type OfflinePreferenceContextValue,
+  type OfflinePreferenceProviderProps,
+} from "./offline/OfflinePreferenceProvider.js";
+export { useEffectiveOffline } from "./offline/useEffectiveOffline.js";
+export { effectiveOfflineForTesting, type EffectiveOfflineEnv } from "./offline/effectiveOffline.js";
+export {
+  KB_RAG_OFFLINE_PREF_PREFIX,
+  PREFER_OFFLINE_STORAGE_KEY,
+} from "./offline/offlinePrefStorage.js";

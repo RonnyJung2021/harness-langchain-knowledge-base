@@ -1,5 +1,5 @@
 import { useCallback, useState } from "react";
-import { Platform } from "react-native";
+import { Platform, Switch } from "react-native";
 import { ActivityIndicator, Box, Pressable, ScrollView, Text } from "@kb-rag/design-system";
 import { useTheme } from "@kb-rag/design-system";
 import type { KbBundleStore } from "@kb-rag/client-offline-core";
@@ -9,6 +9,7 @@ import {
   kbBundleSyncErrorToUserMessage,
   syncKbBundleFromServer,
 } from "../offline/syncKbBundle.js";
+import { useOfflinePreference } from "../offline/OfflinePreferenceProvider.js";
 import { useLikelyOnline } from "../offline/useLikelyOnline.js";
 import {
   formatDiagnosticsApiBaseUrl,
@@ -86,6 +87,7 @@ export function DiagnosticsPanel(props: DiagnosticsPanelProps) {
   const [syncBusy, setSyncBusy] = useState(false);
   const [syncLine, setSyncLine] = useState<string | null>(null);
   const likelyOnline = useLikelyOnline();
+  const { preferOffline, setPreferOffline, hydrated: offlinePrefHydrated } = useOfflinePreference();
 
   const url = useCallback(
     (path: string) => {
@@ -224,6 +226,43 @@ export function DiagnosticsPanel(props: DiagnosticsPanelProps) {
       <Text style={{ fontSize: tokens.fontSize.md, fontWeight: "700", marginBottom: tokens.space.sm }}>
         连接自检
       </Text>
+
+      <Box
+        style={{
+          marginBottom: tokens.space.md,
+          paddingBottom: tokens.space.md,
+          borderBottomWidth: 1,
+          borderBottomColor: tokens.colors.border,
+        }}
+      >
+        <Text style={{ fontSize: tokens.fontSize.sm, fontWeight: "700", marginBottom: tokens.space.xs }}>
+          客户端管道（非服务端状态）
+        </Text>
+        <Text
+          style={{
+            fontSize: tokens.fontSize.xs,
+            color: tokens.colors.textMuted,
+            marginBottom: tokens.space.sm,
+            lineHeight: 18,
+          }}
+        >
+          与下方「运行自检」中的 GET /v1/runtime-info 等探测解耦：runtime-info 描述服务端；本开关仅决定本机是否优先走离线问答管道。主动离线仍须先在下方「同步知识库到本机」；生成阶段为降级占位（stub），与 README
+          离线说明一致。
+        </Text>
+        <Box style={{ flexDirection: "row", alignItems: "center", minHeight: tokens.touchTargetMin }}>
+          <Text style={{ flex: 1, fontSize: tokens.fontSize.sm, marginRight: tokens.space.sm }}>
+            主动使用离线模式
+          </Text>
+          <Switch
+            value={preferOffline}
+            disabled={!offlinePrefHydrated}
+            onValueChange={(v) => {
+              setPreferOffline(v);
+            }}
+          />
+        </Box>
+      </Box>
+
       <Text
         style={{
           fontSize: tokens.fontSize.xs,
