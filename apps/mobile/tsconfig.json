@@ -1,7 +1,9 @@
 {
   "compilerOptions": {
     "target": "ES2022",
-    "lib": ["ES2022"],
+    "lib": [
+      "ES2022"
+    ],
     "strict": true,
     "jsx": "react-jsx",
     "module": "ESNext",
@@ -9,13 +11,27 @@
     "noEmit": true,
     "skipLibCheck": true,
     "allowSyntheticDefaultImports": true,
-    "types": ["node"],
+    "types": [
+      "node"
+    ],
     "baseUrl": ".",
     "paths": {
-      "@kb-rag/shared": ["../../packages/shared/src/index.ts"],
-      "@kb-rag/design-system": ["../../packages/design-system/src/index.ts"],
-      "@kb-rag/app-shared": ["../../packages/app-shared/src/index.ts"]
+      "@kb-rag/shared": [
+        "../../packages/shared/src/index.ts"
+      ],
+      "@kb-rag/design-system": [
+        "../../packages/design-system/src/index.ts"
+      ],
+      "@kb-rag/app-shared": [
+        "../../packages/app-shared/src/index.ts"
+      ]
     }
   },
-  "include": ["App.tsx", "index.js", "babel.config.js", "metro.config.js"]
+  "include": [
+    "App.tsx",
+    "index.js",
+    "babel.config.js",
+    "metro.config.js"
+  ],
+  "extends": "expo/tsconfig.base"
 }

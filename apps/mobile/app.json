@@ -4,8 +4,14 @@
     "slug": "kb-rag-mobile",
     "version": "1.0.0",
     "orientation": "portrait",
-    "platforms": ["ios", "android"],
+    "platforms": [
+      "ios",
+      "android"
+    ],
     "userInterfaceStyle": "automatic",
-    "scheme": "kb-rag-mobile"
+    "scheme": "kb-rag-mobile",
+    "android": {
+      "package": "com.anonymous.kbragmobile"
+    }
   }
 }
