@@ -1,6 +1,9 @@
+import { createWebIndexedDbKbBundleStore } from "@kb-rag/client-offline-core";
 import { DesignSystemSmoke } from "@kb-rag/design-system";
 import { KbWorkspaceApp } from "@kb-rag/app-shared";
 import { useCallback, useRef } from "react";
+
+const webKbBundleStore = createWebIndexedDbKbBundleStore();
 
 export default function App() {
   if (import.meta.env.VITE_DS_SMOKE === "1") {
@@ -36,7 +39,12 @@ export default function App() {
         style={{ display: "none" }}
         aria-hidden
       />
-      <KbWorkspaceApp apiBaseUrl="" adminToken={adminToken} pickPdfFile={pickPdfFile} />
+      <KbWorkspaceApp
+        apiBaseUrl=""
+        adminToken={adminToken}
+        pickPdfFile={pickPdfFile}
+        kbBundleStore={webKbBundleStore}
+      />
     </>
   );
 }

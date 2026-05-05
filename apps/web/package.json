@@ -11,6 +11,7 @@
   },
   "dependencies": {
     "@kb-rag/app-shared": "workspace:*",
+    "@kb-rag/client-offline-core": "workspace:*",
     "@kb-rag/design-system": "workspace:*",
     "@kb-rag/shared": "workspace:*",
     "react": "^18.3.1",

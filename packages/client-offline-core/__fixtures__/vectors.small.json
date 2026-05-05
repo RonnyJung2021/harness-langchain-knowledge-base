@@ -504,7 +504,7 @@
     }
   },
   {
-    "content": "Playwright E2E 与 ARK_API_KEY",
+    "content": "Playwright E2E 与云端密钥配置说明（fixture 不含真实密钥字面量）",
     "embedding": [
       0.14122156969877356,
       0.05029701779882854,

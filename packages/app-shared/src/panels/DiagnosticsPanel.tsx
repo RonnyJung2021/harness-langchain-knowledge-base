@@ -4,7 +4,7 @@ import { ActivityIndicator, Box, Pressable, ScrollView, Text } from "@kb-rag/des
 import { useTheme } from "@kb-rag/design-system";
 import type { KbBundleStore } from "@kb-rag/client-offline-core";
 import { sanitizeForUi } from "../httpFeedback.js";
-import { joinApiPath } from "@kb-rag/shared";
+import { joinApiPath, OFFLINE_USER_ERROR_CODES, offlineUserBannerMessage } from "@kb-rag/shared";
 import {
   kbBundleSyncErrorToUserMessage,
   syncKbBundleFromServer,
@@ -54,10 +54,10 @@ async function runStep(
     const low = msg.toLowerCase();
     const netHint =
       Platform.OS !== "web" &&
-      /network|fetch failed|failed to fetch|load failed|internet connection|offline|unreachable/i.test(
+      /network|fetch failed|failed to fetch|load failed|internet connection|offline|unreachable|主动离线|有效离线|飞行模式/i.test(
         low,
       )
-        ? "（常见：飞行模式、局域网不可达、或 EXPO_PUBLIC_API_BASE_URL 指向错误）"
+        ? "（常见：飞行模式、主动/有效离线、局域网不可达，或 EXPO_PUBLIC_API_BASE_URL 指向错误）"
         : "";
     return {
       name,
@@ -120,7 +120,9 @@ export function DiagnosticsPanel(props: DiagnosticsPanelProps) {
       const n = loaded?.vectors.length ?? 0;
       setSyncLine(`同步成功：已写入本机（vectors=${String(n)}）。`);
     } catch (e) {
-      setSyncLine(kbBundleSyncErrorToUserMessage(e));
+      setSyncLine(
+        `${offlineUserBannerMessage(OFFLINE_USER_ERROR_CODES.OFFLINE_SYNC_FAILED)} ${kbBundleSyncErrorToUserMessage(e)}`,
+      );
     } finally {
       setSyncBusy(false);
     }

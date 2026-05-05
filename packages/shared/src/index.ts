@@ -4,3 +4,4 @@ export * from "./errors.js";
 export * from "./httpShape.js";
 export * from "./kbBundle.js";
 export * from "./runtime.js";
+export * from "./offlineUi.js";

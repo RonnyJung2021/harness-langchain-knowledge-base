@@ -1,6 +1,7 @@
 import type { KbBundleStore } from "@kb-rag/client-offline-core";
 import { runLocalRagTurn } from "@kb-rag/client-offline-core";
 import type { ChatMessage, CitationSummary, PostSessionMessageResponseBody } from "@kb-rag/shared";
+import { OFFLINE_USER_ERROR_CODES, offlineRagFailureUserBanner, offlineUserBannerMessage } from "@kb-rag/shared";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { ApiRequestError, errorToBannerText, fetchJson } from "../api/httpApi.js";
 
@@ -119,18 +120,12 @@ export function useChatPanelDualMode(opts: {
       setBusy(true);
       try {
         if (opts.bundleStore === null) {
-          opts.onNotice(
-            "[OFFLINE_NO_STORE] 未注入本机知识库存储（KbBundleStore），无法离线问答。",
-            "err",
-          );
+          opts.onNotice(offlineUserBannerMessage(OFFLINE_USER_ERROR_CODES.OFFLINE_NO_STORE), "err");
           return;
         }
         const bundle = await opts.bundleStore.load();
         if (bundle === null || bundle.vectors.length === 0) {
-          opts.onNotice(
-            "[OFFLINE_NO_BUNDLE] 未同步知识库：请先在「连接自检」中点击「同步知识库到本机」后再试。",
-            "err",
-          );
+          opts.onNotice(offlineUserBannerMessage(OFFLINE_USER_ERROR_CODES.OFFLINE_NO_BUNDLE), "err");
           return;
         }
         const trimmed = text.trim();
@@ -153,7 +148,7 @@ export function useChatPanelDualMode(opts: {
         setMessages([...hist, userMsg, assistantMsg]);
       } catch (e) {
         const msg = errorToBannerText(e);
-        opts.onNotice(`[OFFLINE_RAG_FAILED] ${msg}`, "err");
+        opts.onNotice(offlineRagFailureUserBanner(msg), "err");
       } finally {
         setBusy(false);
       }

@@ -35,3 +35,9 @@ pnpm dev:web
 ```
 
 设计系统验收：`VITE_DS_SMOKE=1`（见 `.env.example`）。
+
+## 端内离线（IndexedDB）
+
+- **`apps/web/src/App.tsx`** 注入 **`createWebIndexedDbKbBundleStore()`**，与 RN 侧 `KbBundleStore` 语义一致：可在「连接自检」中 **同步知识库到本机**，再在 **主动离线 / 浏览器离线** 下走本机 RAG（占位回答）。  
+- 依赖 **`@kb-rag/client-offline-core`**（`vite.config.ts` 已 alias 到源码）；运行时路径不含 **`node:fs`**（该包源码侧无 Node 专属 API）。  
+- **Service Worker**（`public/sw.js`）仍不缓存 **`/v1/*`**；向量快照存 **IndexedDB**，与 SW 无关。

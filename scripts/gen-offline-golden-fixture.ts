@@ -25,7 +25,7 @@ const texts = [
   "kb_store 目录结构简述",
   "会话持久化 ARK_SESSION_PERSIST",
   "Express 限流与 JSON body 上限",
-  "Playwright E2E 与 ARK_API_KEY",
+  "Playwright E2E 与云端密钥配置说明",
   "Docker Compose 健康检查 wget",
   "本节小结：离线黄金夹具",
 ];

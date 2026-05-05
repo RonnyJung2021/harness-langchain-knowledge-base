@@ -22,6 +22,7 @@
 
 ## 依赖与路径
 
+- **`@react-native-community/netinfo`**：与 **`@kb-rag/app-shared`** 中 **`useEffectiveOffline`** 配合，用于「网络离线」判定（与「主动离线」开关组合）。  
 - **`babel-plugin-module-resolver`**：将 `@kb-rag/*` 解析到 **`packages/*/src`**（与 Web 侧直连源码的开发体验对齐）。
 - **`metro.config.js`**：`watchFolders` 指向仓库根，便于 monorepo 解析。
 - 仓库根脚本 **`pnpm dev:mobile`**：会先 `tsc` 构建 workspace 包；日常也可用 **`pnpm --filter kb-rag-mobile run start`**（若 Metro 已通过 Babel 编源码，仍建议改动 shared 后跑一次 workspace build 以免类型与产物漂移）。

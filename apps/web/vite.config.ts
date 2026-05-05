@@ -10,6 +10,7 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
  * 详见 `apps/web/README.md`「Metro-less 限制」。
  */
 const reactNativeWebRoot = path.resolve(__dirname, "node_modules/react-native-web");
+const clientOfflineCoreRoot = path.resolve(__dirname, "../../packages/client-offline-core/src/index.ts");
 
 /** Playwright / 本机多实例时可通过环境变量指向其它 API 端口（默认 8788） */
 const apiPort = process.env.VITE_API_PORT ?? "8788";
@@ -23,6 +24,7 @@ export default defineConfig({
       "@kb-rag/shared": path.resolve(__dirname, "../../packages/shared/src/index.ts"),
       "@kb-rag/design-system": path.resolve(__dirname, "../../packages/design-system/src/index.ts"),
       "@kb-rag/app-shared": path.resolve(__dirname, "../../packages/app-shared/src/index.ts"),
+      "@kb-rag/client-offline-core": clientOfflineCoreRoot,
     },
     extensions: [".web.tsx", ".web.ts", ".tsx", ".ts", ".jsx", ".js", ".mjs", ".json"],
   },
