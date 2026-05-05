@@ -7,6 +7,7 @@ export {
   manifestPath,
   memoryStoreFromSerialized,
   readManifest,
+  readSerializedVectors,
   vectorsPath,
 } from "./store/localVectorStore.js";
 export { retrieveRelevantChunks } from "./ask/retrieve.js";

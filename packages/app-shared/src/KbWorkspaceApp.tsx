@@ -10,6 +10,8 @@ import {
   WORKSPACE_SHELL_MAX_WIDTH_PX,
 } from "./layout/workspaceResponsive.js";
 import { warnIfNativeMissingApiBase } from "./config/nativeApiGuard.js";
+import { KbBundleStoreProvider } from "./context/KbBundleStoreContext.js";
+import type { KbBundleStore } from "@kb-rag/client-offline-core";
 import { ChatPanel } from "./panels/ChatPanel.js";
 import { DiagnosticsPanel } from "./panels/DiagnosticsPanel.js";
 import { KbReplacePanel } from "./panels/KbReplacePanel.js";
@@ -20,6 +22,10 @@ export type KbWorkspaceAppProps = {
   /** 与 HTTP_ADMIN_TOKEN 对应的 Bearer（勿打入公开仓库）。 */
   adminToken?: string;
   pickPdfFile: () => Promise<PdfFileLike | null>;
+  /**
+   * 端内知识库快照持久化（如 RN `KbBundleStore`）；由宿主注入，不在 `@kb-rag/client-offline-core` 内依赖 Expo。
+   */
+  kbBundleStore?: KbBundleStore | null;
 };
 
 type CompactTab = "chat" | "tools";
@@ -27,6 +33,7 @@ type CompactTab = "chat" | "tools";
 function ToolsStack(props: {
   apiBaseUrl: string;
   adminToken?: string;
+  kbBundleStore?: KbBundleStore | null;
   pickPdfFile: () => Promise<PdfFileLike | null>;
   session: ReturnType<typeof useSessionApi>;
   banner: { text: string; kind: "ok" | "err" } | null;
@@ -35,7 +42,7 @@ function ToolsStack(props: {
   fillAvailable?: boolean;
 }) {
   const { tokens } = useTheme();
-  const { apiBaseUrl, adminToken, pickPdfFile, session, banner, onNotice, fillAvailable } = props;
+  const { apiBaseUrl, adminToken, kbBundleStore, pickPdfFile, session, banner, onNotice, fillAvailable } = props;
 
   return (
     <ScrollView
@@ -106,7 +113,7 @@ function ToolsStack(props: {
       ) : null}
 
       <Box style={{ marginBottom: tokens.space.md }}>
-        <DiagnosticsPanel apiBaseUrl={apiBaseUrl} />
+        <DiagnosticsPanel apiBaseUrl={apiBaseUrl} adminToken={adminToken} kbBundleStore={kbBundleStore} />
       </Box>
 
       <KbReplacePanel
@@ -122,7 +129,7 @@ function ToolsStack(props: {
 function KbWorkspaceInner(props: KbWorkspaceAppProps) {
   const { tokens } = useTheme();
   const { variant } = useWorkspaceLayout();
-  const { apiBaseUrl, adminToken, pickPdfFile } = props;
+  const { apiBaseUrl, adminToken, kbBundleStore, pickPdfFile } = props;
   const [banner, setBanner] = useState<{ text: string; kind: "ok" | "err" } | null>(null);
   const [compactTab, setCompactTab] = useState<CompactTab>("chat");
 
@@ -166,6 +173,7 @@ function KbWorkspaceInner(props: KbWorkspaceAppProps) {
   const toolsPropsBase = {
     apiBaseUrl,
     adminToken,
+    kbBundleStore,
     pickPdfFile,
     session,
     banner,
@@ -317,9 +325,12 @@ function KbWorkspaceInner(props: KbWorkspaceAppProps) {
 }
 
 export function KbWorkspaceApp(props: KbWorkspaceAppProps) {
+  const { kbBundleStore, ...innerProps } = props;
   return (
     <ThemeProvider colorScheme="light">
-      <KbWorkspaceInner {...props} />
+      <KbBundleStoreProvider value={kbBundleStore ?? null}>
+        <KbWorkspaceInner {...innerProps} kbBundleStore={kbBundleStore} />
+      </KbBundleStoreProvider>
     </ThemeProvider>
   );
 }

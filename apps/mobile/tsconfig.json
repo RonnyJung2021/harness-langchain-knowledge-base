@@ -2,7 +2,8 @@
   "compilerOptions": {
     "target": "ES2022",
     "lib": [
-      "ES2022"
+      "ES2022",
+      "DOM"
     ],
     "strict": true,
     "jsx": "react-jsx",
@@ -24,11 +25,15 @@
       ],
       "@kb-rag/app-shared": [
         "../../packages/app-shared/src/index.ts"
+      ],
+      "@kb-rag/client-offline-core": [
+        "../../packages/client-offline-core/src/index.ts"
       ]
     }
   },
   "include": [
     "App.tsx",
+    "src/**/*.ts",
     "index.js",
     "babel.config.js",
     "metro.config.js"

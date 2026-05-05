@@ -22,6 +22,7 @@
   "devDependencies": {
     "@kb-rag/api-core": "workspace:*",
     "@langchain/core": "^1.1.44",
+    "fake-indexeddb": "^6.0.0",
     "typescript": "~5.7.2",
     "vitest": "^3.2.4"
   }

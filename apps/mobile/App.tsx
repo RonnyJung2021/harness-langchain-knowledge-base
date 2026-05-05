@@ -3,6 +3,9 @@ import { KbWorkspaceApp } from "@kb-rag/app-shared";
 import type { PdfFileLike } from "@kb-rag/app-shared";
 import * as DocumentPicker from "expo-document-picker";
 import { StatusBar } from "expo-status-bar";
+import { createRnKbBundleStore } from "./src/storage/rnKbBundleStore";
+
+const rnKbBundleStore = createRnKbBundleStore();
 
 /**
  * Native 入口：`EXPO_PUBLIC_API_BASE_URL` 由 Expo 注入；Web 同源场景在 apps/web 使用 `apiBaseUrl=""`。
@@ -44,7 +47,12 @@ export default function App() {
   return (
     <>
       <StatusBar style="auto" />
-      <KbWorkspaceApp apiBaseUrl={base} adminToken={token} pickPdfFile={pickPdfFile} />
+      <KbWorkspaceApp
+        apiBaseUrl={base}
+        adminToken={token}
+        pickPdfFile={pickPdfFile}
+        kbBundleStore={rnKbBundleStore}
+      />
     </>
   );
 }

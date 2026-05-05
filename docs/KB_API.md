@@ -213,6 +213,34 @@ curl -sS -X POST http://127.0.0.1:8788/v1/knowledge-base/replace \
   -F "file=@pdfs/sample.pdf;type=application/pdf"
 ```
 
+### 6.1 导出知识库快照（只读 JSON）
+
+`GET /v1/knowledge-base/bundle`
+
+**鉴权**：与 **`POST /v1/knowledge-base/replace`** 相同，须 `Authorization: Bearer <HTTP_ADMIN_TOKEN>`；未配置或 token 错误 → `401` + `UNAUTHORIZED`。
+
+**响应** `200`，`Content-Type: application/json`；JSON 根对象仅含：
+
+- **`manifest`**：`kb_store/manifest.json` 的对象（v1 清单）。
+- **`vectors`**：`kb_store/vectors.json` 根数组（与入库序列化一致）。
+
+**不含任何方舟密钥**：响应仅反映磁盘 `kb_store` 内容，**不会**包含 `ARK_API_KEY` 或其它密钥字段。
+
+**压缩（可选）**：若请求头 **`Accept-Encoding`** 声明 **`gzip`**，且序列化后的 UTF-8 字节长度 **≥ 32KiB**，服务端可能返回 **`Content-Encoding: gzip`** 的压缩体（仍为 JSON 语义）；并设置 **`Vary: Accept-Encoding`**。客户端需按 HTTP 规范解压后再 `JSON.parse`。
+
+**错误**
+
+- `404` + **`KB_MANIFEST_NOT_FOUND`**：不存在或无法读取 `manifest.json`。
+- `404` + **`KB_VECTORS_EMPTY`**：manifest 可读但向量数组为空（尚未 ingest 或文件为空）。
+
+**示例**
+
+```bash
+export HTTP_ADMIN_TOKEN=dev-secret
+curl -sS -H "Authorization: Bearer ${HTTP_ADMIN_TOKEN}" \
+  http://127.0.0.1:8788/v1/knowledge-base/bundle | jq '.manifest.totalChunks, (.vectors|length)'
+```
+
 ---
 
 ## 7. 类型定义（可选）

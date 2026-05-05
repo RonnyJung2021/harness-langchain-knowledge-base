@@ -2,8 +2,14 @@ import { useCallback, useState } from "react";
 import { Platform } from "react-native";
 import { ActivityIndicator, Box, Pressable, ScrollView, Text } from "@kb-rag/design-system";
 import { useTheme } from "@kb-rag/design-system";
+import type { KbBundleStore } from "@kb-rag/client-offline-core";
 import { sanitizeForUi } from "../httpFeedback.js";
 import { joinApiPath } from "@kb-rag/shared";
+import {
+  kbBundleSyncErrorToUserMessage,
+  syncKbBundleFromServer,
+} from "../offline/syncKbBundle.js";
+import { useLikelyOnline } from "../offline/useLikelyOnline.js";
 import {
   formatDiagnosticsApiBaseUrl,
   parseHttpBodyForDiagnostics,
@@ -65,14 +71,21 @@ async function runStep(
 export type DiagnosticsPanelProps = {
   /** 空字符串表示 fetch 同源相对路径（Web）；Native 填 `EXPO_PUBLIC_API_BASE_URL`。 */
   apiBaseUrl: string;
+  /** 与 `HTTP_ADMIN_TOKEN` 一致；用于 `GET /v1/knowledge-base/bundle`。 */
+  adminToken?: string;
+  /** 未注入时隐藏「同步到本机」能力（仅展示说明）。 */
+  kbBundleStore?: KbBundleStore | null;
 };
 
 export function DiagnosticsPanel(props: DiagnosticsPanelProps) {
   const { tokens } = useTheme();
-  const { apiBaseUrl } = props;
+  const { apiBaseUrl, adminToken, kbBundleStore } = props;
   const [running, setRunning] = useState(false);
   const [withShortMessage, setWithShortMessage] = useState(false);
   const [steps, setSteps] = useState<StepResult[]>([]);
+  const [syncBusy, setSyncBusy] = useState(false);
+  const [syncLine, setSyncLine] = useState<string | null>(null);
+  const likelyOnline = useLikelyOnline();
 
   const url = useCallback(
     (path: string) => {
@@ -85,6 +98,31 @@ export function DiagnosticsPanel(props: DiagnosticsPanelProps) {
   const apiDisplay = formatDiagnosticsApiBaseUrl(apiBaseUrl);
   const nativeMissingBase =
     Platform.OS !== "web" && apiBaseUrl.trim() === "";
+  const adminTrimmed = adminToken?.trim() ?? "";
+  const missingAdmin = adminTrimmed === "";
+  const hasStore = kbBundleStore !== undefined && kbBundleStore !== null;
+
+  const onSyncKbBundle = useCallback(async () => {
+    if (!hasStore || kbBundleStore === null || kbBundleStore === undefined) {
+      return;
+    }
+    if (missingAdmin) {
+      setSyncLine("未配置 Admin Token，无法请求受保护接口。");
+      return;
+    }
+    setSyncBusy(true);
+    setSyncLine(null);
+    try {
+      await syncKbBundleFromServer(apiBaseUrl, adminTrimmed, kbBundleStore);
+      const loaded = await kbBundleStore.load();
+      const n = loaded?.vectors.length ?? 0;
+      setSyncLine(`同步成功：已写入本机（vectors=${String(n)}）。`);
+    } catch (e) {
+      setSyncLine(kbBundleSyncErrorToUserMessage(e));
+    } finally {
+      setSyncBusy(false);
+    }
+  }, [adminTrimmed, apiBaseUrl, hasStore, kbBundleStore, missingAdmin]);
 
   const run = useCallback(async () => {
     setRunning(true);
@@ -246,6 +284,83 @@ export function DiagnosticsPanel(props: DiagnosticsPanelProps) {
           <Text style={{ color: tokens.colors.primaryContrast, fontWeight: "600" }}>运行自检</Text>
         )}
       </Pressable>
+
+      {likelyOnline && !nativeMissingBase ? (
+        <Box
+          style={{
+            marginTop: tokens.space.md,
+            paddingTop: tokens.space.md,
+            borderTopWidth: 1,
+            borderTopColor: tokens.colors.border,
+          }}
+        >
+          <Text style={{ fontSize: tokens.fontSize.sm, fontWeight: "700", marginBottom: tokens.space.xs }}>
+            知识库离线包
+          </Text>
+          <Text
+            style={{
+              fontSize: tokens.fontSize.xs,
+              color: tokens.colors.textMuted,
+              marginBottom: tokens.space.sm,
+            }}
+          >
+            在线时可将服务端快照同步到本机存储，供后续离线 RAG 使用（需 Admin Token）。
+          </Text>
+          {!hasStore ? (
+            <Text style={{ fontSize: tokens.fontSize.xs, color: tokens.colors.textMuted }}>
+              当前未注入 KbBundleStore，宿主（如 RN）需在根组件传入 store。
+            </Text>
+          ) : (
+            <>
+              <Pressable
+                onPress={() => void onSyncKbBundle()}
+                disabled={syncBusy || missingAdmin}
+                style={{
+                  minHeight: tokens.touchTargetMin,
+                  paddingHorizontal: tokens.space.lg,
+                  justifyContent: "center",
+                  alignItems: "center",
+                  backgroundColor: tokens.colors.surface,
+                  borderWidth: 1,
+                  borderColor: tokens.colors.border,
+                  borderRadius: tokens.radius.sm,
+                  opacity: syncBusy || missingAdmin ? 0.55 : 1,
+                }}
+              >
+                {syncBusy ? (
+                  <ActivityIndicator />
+                ) : (
+                  <Text style={{ fontWeight: "600" }}>同步知识库到本机</Text>
+                )}
+              </Pressable>
+              {missingAdmin ? (
+                <Text
+                  style={{
+                    fontSize: tokens.fontSize.xs,
+                    color: tokens.colors.errorText,
+                    marginTop: tokens.space.xs,
+                  }}
+                >
+                  未配置 Admin Token（Web 环境变量 / Native EXPO_PUBLIC_HTTP_ADMIN_TOKEN）。
+                </Text>
+              ) : null}
+              {syncLine !== null ? (
+                <Text
+                  style={{
+                    fontSize: tokens.fontSize.xs,
+                    color: tokens.colors.textMuted,
+                    marginTop: tokens.space.sm,
+                  }}
+                  selectable
+                >
+                  {syncLine}
+                </Text>
+              ) : null}
+            </>
+          )}
+        </Box>
+      ) : null}
+
       {steps.length > 0 ? (
         <ScrollView style={{ marginTop: tokens.space.md, maxHeight: 280 }}>
           {steps.map((s) => (

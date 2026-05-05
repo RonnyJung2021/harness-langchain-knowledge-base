@@ -22,3 +22,18 @@ export {
   truncateReferencesContextBlock,
   type RagScoredDoc,
 } from "./ragFormat.js";
+export { OFFLINE_STUB_REPLY } from "./offlineStubReply.js";
+export {
+  assembleLocalRagMessages,
+  runLocalRagTurn,
+  trimHistoryForRagModel,
+  type LocalChatContextLimits,
+  type LocalRagChatMessage,
+  type LocalRagTurnOpts,
+} from "./localRagTurn.js";
+export type { KbBundleStore } from "./storage/types.js";
+export {
+  chunkSerializedVectors,
+  createWebIndexedDbKbBundleStore,
+  KB_BUNDLE_STORE_SCHEMA_VERSION,
+} from "./storage/webIndexedDb.js";

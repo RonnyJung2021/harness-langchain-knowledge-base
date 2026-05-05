@@ -16,6 +16,7 @@
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
+    "@kb-rag/client-offline-core": "workspace:*",
     "@kb-rag/design-system": "workspace:*",
     "@kb-rag/shared": "workspace:*"
   },
