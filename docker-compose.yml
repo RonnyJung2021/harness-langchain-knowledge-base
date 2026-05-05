@@ -1,8 +1,9 @@
+# 端口：宿主机 `${KB_RAG_HOST_PORT:-8788}` → 容器 `${PORT:-8787}`（均可写在仓库根 `.env` 供 compose 插值）
 services:
   kb-rag:
     build: .
     ports:
-      - "8787:8787"
+      - "${KB_RAG_HOST_PORT:-8788}:${PORT:-8787}"
     env_file:
       - .env
     volumes:
@@ -15,7 +16,7 @@ services:
           "CMD",
           "wget",
           "-qO-",
-          "http://127.0.0.1:8787/healthz",
+          "http://127.0.0.1:${PORT:-8787}/healthz",
         ]
       interval: 15s
       timeout: 5s

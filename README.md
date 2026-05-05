@@ -37,11 +37,33 @@ pnpm ask -- "这份资料的核心结论是什么？"
 
 HTTP JSON 契约见 **`docs/KB_API.md`**。
 
+### 临时修改端口（避免「address already in use」）
+
+同一台机器上若 **`8787` 已被占用**（例如已运行 **`pnpm serve`**），可选用下列方式之一：
+
+**Docker Compose（推荐与本机 dev 错开）**
+
+- 默认映射为 **`8788:8787`**（宿主机 **8788** → 容器内仍监听 **8787**），浏览器打开 **http://127.0.0.1:8788**。  
+- **临时一行命令**（不改文件）：  
+  `KB_RAG_HOST_PORT=8790 docker compose up --build` → 访问 **http://127.0.0.1:8790**。  
+- **在 `.env` 里统一改**（compose 会自动读仓库根 `.env` 做插值）：同时设定 **`KB_RAG_HOST_PORT`**（宿主机对外端口）与 **`PORT`**（容器内监听端口）。二者通常设为**同一个数字**即可，例如：  
+  `KB_RAG_HOST_PORT=8790` 与 `PORT=8790` → 映射为 **8790:8790**，访问 **http://127.0.0.1:8790**。  
+  若只想改宿主机端口、保持容器内仍为 8787：只设 **`KB_RAG_HOST_PORT=8790`**，勿改 **`PORT`**。
+
+**本机 `pnpm serve` / Vite 双进程**
+
+- API：**`PORT=8790 pnpm serve`**  
+- 前端代理：终端 B 执行 **`VITE_API_PORT=8790 pnpm dev:web`**（与 **`web/vite.config.ts`** 中默认代理一致）。
+
+**本机单进程（`pnpm serve` 已托管 `web/dist`）**
+
+- **`PORT=8790 pnpm serve`**，浏览器 **http://127.0.0.1:8790**。
+
 ### Docker（阶段 Q，开发 / 演示）
 
 1. 复制 **`cp .env.example .env`** 并填写方舟相关变量；**不要将含密钥的 `.env` 打进镜像**（已在 `.dockerignore` 忽略）。  
 2. **`./kb_store` 中须有已 ingest 的向量**（`vectors.json` / `manifest.json`），否则进程启动时会报错；可将本机已有 `kb_store` 挂入容器，或先在宿主机执行 `pnpm ingest` 再启动 compose。  
-3. 启动：**`docker compose up --build`**，浏览器访问 **http://127.0.0.1:8787**（静态页 + 同源 **`/v1`**）。Compose 已映射 **`8787:8787`**，并通过 **`env_file: .env`** 注入环境变量。  
+3. 启动：**`docker compose up --build`**，浏览器访问 **http://127.0.0.1:8788**（默认映射 **`8788:8787`**，静态页 + 同源 **`/v1`**）。可通过 **`KB_RAG_HOST_PORT`** / **`PORT`** 调整，见上文「临时修改端口」。Compose 通过 **`env_file: .env`** 向容器注入环境变量。  
 4. **数据卷**：`./kb_store` → `/app/kb_store`、`./sessions` → `/app/sessions`、`./kb_uploads` → `/app/kb_uploads`（上传替换 PDF 时写入）。  
 5. **运行身份**：镜像最终阶段为 **`node:20-alpine`**，主进程以 **`USER node`**（非 root）执行 **`node dist/server/main.js`**。  
 6. **健康检查**：compose 内对 **`GET /healthz`** 配置了 **`healthcheck`**（镜像内使用 `wget`）。
